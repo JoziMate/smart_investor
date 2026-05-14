@@ -53,7 +53,7 @@ class SmartInwestorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Smart Inwestor - Risk & Data Manager")
+        self.title("Gra Inwestycyjna - Portfolio Manager")
         self.geometry("600x500")
 
         # Layout configuration
@@ -62,19 +62,19 @@ class SmartInwestorApp(ctk.CTk):
 
         # 1. Header
         self.header_label = ctk.CTkLabel(
-            self, text="Smart Inwestor", font=ctk.CTkFont(size=24, weight="bold")
+            self, text="Gra Inwestycyjna - Portfolio Manager", font=ctk.CTkFont(size=24, weight="bold")
         )
         self.header_label.grid(row=0, column=0, pady=(20, 10))
 
         # 2. Button 1: Aktualizuj portfel z API
         self.api_button = ctk.CTkButton(
-            self, text="Aktualizuj portfel z API", command=self.update_portfolio_api
+            self, text="Update Market Prices", command=self.update_portfolio_api
         )
         self.api_button.grid(row=1, column=0, pady=(10, 10))
 
         # 3. Button 2: Skanuj zrzut ekranu - AI
         self.vision_button = ctk.CTkButton(
-            self, text="Skanuj zrzut ekranu - AI", command=self.scan_screenshot_ai
+            self, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
         )
         self.vision_button.grid(row=2, column=0, pady=(10, 20))
 
@@ -126,7 +126,7 @@ class SmartInwestorApp(ctk.CTk):
         """
         self.api_button.configure(state="disabled")
         self.vision_button.configure(state="disabled")
-        print("--- Rozpoczęto aktualizację portfela z API ---")
+        print("--- Starting Market Prices Update ---")
 
         thread = threading.Thread(target=self._run_update_portfolio_api, daemon=True)
         thread.start()
@@ -164,11 +164,11 @@ class SmartInwestorApp(ctk.CTk):
 
             # Save workbook
             if excel.save_workbook():
-                print("--- Aktualizacja API zakończona sukcesem ---")
+                print("--- Market Prices Update completed successfully ---")
             else:
-                print("--- Aktualizacja API nie powiodła się podczas zapisu ---")
+                print("--- Market Prices Update failed during save ---")
         except Exception as e:
-            logging.error(f"Wystąpił nieoczekiwany błąd podczas aktualizacji API: {e}")
+            logging.error(f"An unexpected error occurred during Market Prices Update: {e}")
         finally:
             self.after(0, self._restore_buttons)
 
@@ -177,7 +177,7 @@ class SmartInwestorApp(ctk.CTk):
         Opens a file dialog to select an image, then triggers Vision parsing in a background thread.
         """
         file_path = filedialog.askopenfilename(
-            title="Wybierz zrzut ekranu",
+            title="Select Trade Screenshot",
             filetypes=[("Image files", "*.png *.jpg *.jpeg")]
         )
 
@@ -186,7 +186,7 @@ class SmartInwestorApp(ctk.CTk):
 
         self.api_button.configure(state="disabled")
         self.vision_button.configure(state="disabled")
-        print(f"--- Rozpoczęto analizę AI dla pliku: {os.path.basename(file_path)} ---")
+        print(f"--- Starting AI analysis for file: {os.path.basename(file_path)} ---")
 
         thread = threading.Thread(target=self._run_scan_screenshot_ai, args=(file_path,), daemon=True)
         thread.start()
@@ -209,13 +209,13 @@ class SmartInwestorApp(ctk.CTk):
                     excel.append_new_position(trade)
 
                 if excel.save_workbook():
-                    print("--- Analiza AI i zapis do pliku zakończone sukcesem ---")
+                    print("--- AI analysis and file save completed successfully ---")
                 else:
-                    print("--- Zapis do pliku po analizie AI nie powiódł się ---")
+                    print("--- File save failed after AI analysis ---")
             else:
-                logging.warning("Nie udało się odczytać żadnych transakcji ze zdjęcia lub wystąpił błąd. Skoroszyt nie został zapisany.")
+                logging.warning("Failed to extract trades from the image or an error occurred. Workbook not saved.")
         except Exception as e:
-            logging.error(f"Wystąpił nieoczekiwany błąd podczas analizy AI: {e}")
+            logging.error(f"An unexpected error occurred during AI analysis: {e}")
         finally:
             self.after(0, self._restore_buttons)
 

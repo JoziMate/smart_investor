@@ -14,9 +14,20 @@ def main():
     """
     Main execution script:
     Depending on arguments, either parses an image for new trades or updates current prices.
+    If no arguments are provided, it launches the graphical user interface.
     """
     parser = argparse.ArgumentParser(description="Portfolio Risk & Data Manager")
     parser.add_argument("--vision", type=str, help="Path to a screenshot for parsing new trades.")
+    parser.add_argument("--update", action="store_true", help="Run standard market update in the terminal.")
+
+    # If no arguments were passed, launch the GUI
+    import sys
+    if len(sys.argv) == 1:
+        from app_gui import SmartInwestorApp
+        app = SmartInwestorApp()
+        app.mainloop()
+        return
+
     args = parser.parse_args()
 
     print("--- Starting Academic Investment Portfolio Update ---")
@@ -47,7 +58,7 @@ def main():
         else:
             logging.warning("No trades were extracted or an error occurred. Workbook not saved.")
 
-    else:
+    elif args.update:
         # Standard Update Mode
         logging.info("Running in Standard Market Update Mode.")
         market_data = MarketDataManager()
