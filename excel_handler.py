@@ -123,6 +123,56 @@ class ExcelHandler:
             logging.error(f"Failed to update cells for {asset}: {e}")
             return False
 
+    def append_new_position(self, trade_data: dict) -> bool:
+        """
+        Appends new trade data to the first completely empty row (based on empty Column A)
+        in the "Pozycje otwarte" sheet.
+
+        Args:
+            trade_data (dict): The trade data with keys 'Ticker', 'Direction', 'Volume', 'EntryPrice'.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if self.sheet is None:
+            logging.error(
+                "Cannot append position: Workbook or sheet is not loaded.")
+            return False
+
+        if self.sheet_name != "Pozycje otwarte":
+            logging.warning(
+                f"Attempting to append position to sheet '{self.sheet_name}' instead of 'Pozycje otwarte'.")
+
+        try:
+            # Find the first row where Column A is empty
+            empty_row = 1
+            while self.sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            # Date format
+            today_str = datetime.now().strftime('%Y-%m-%d')
+
+            # Map columns according to requirements:
+            # Column A = Date
+            # Column C = Ticker
+            # Column D = Direction
+            # Column E = Volume
+            # Column F = Entry Price
+
+            self.sheet.cell(row=empty_row, column=1).value = today_str
+            self.sheet.cell(row=empty_row, column=3).value = trade_data.get('Ticker', '')
+            self.sheet.cell(row=empty_row, column=4).value = trade_data.get('Direction', '')
+            self.sheet.cell(row=empty_row, column=5).value = trade_data.get('Volume', '')
+            self.sheet.cell(row=empty_row, column=6).value = trade_data.get('EntryPrice', '')
+
+            logging.info(
+                f"Appended new position at row {empty_row}: {trade_data}")
+            return True
+
+        except Exception as e:
+            logging.error(f"Failed to append new position: {e}")
+            return False
+
     def save_workbook(self) -> bool:
         """
         Saves the workbook to the file.
