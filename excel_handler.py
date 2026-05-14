@@ -1,6 +1,7 @@
 import openpyxl
 from openpyxl.utils import column_index_from_string
 import logging
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -11,10 +12,10 @@ logging.basicConfig(
 # Users can easily adjust the row and column letters below to match their
 # real spreadsheet layout.
 ASSET_MAPPING = {
-    'MSFT': {'row': 2, 'price_col': 'B', 'value_col': 'C'},
-    'GOOGL': {'row': 3, 'price_col': 'B', 'value_col': 'C'},
-    'TSLA': {'row': 4, 'price_col': 'B', 'value_col': 'C'},
-    'BTC/USDT': {'row': 5, 'price_col': 'B', 'value_col': 'C'},
+    'MSFT': {'row': 16, 'date_col': 'A', 'price_col': 'G'},
+    'GOOGL': {'row': 17, 'date_col': 'A', 'price_col': 'G'},
+    'TSLA': {'row': 24, 'date_col': 'A', 'price_col': 'G'},
+    'BTC/USDT': {'row': 25, 'date_col': 'A', 'price_col': 'G'},
 }
 
 
@@ -77,15 +78,13 @@ class ExcelHandler:
     def update_asset(
             self,
             asset: str,
-            current_price: float,
-            current_value: float) -> bool:
+            current_price: float) -> bool:
         """
-        Updates the price and value cells for a specific asset based on ASSET_MAPPING.
+        Updates the date and price cells for a specific asset based on ASSET_MAPPING.
 
         Args:
             asset (str): The asset ticker (e.g., 'MSFT').
             current_price (float): The fetched current market price.
-            current_value (float): The calculated current value (nominal or notional).
 
         Returns:
             bool: True if the update was successful, False otherwise.
@@ -105,18 +104,19 @@ class ExcelHandler:
 
         try:
             # Convert column letters to 1-based indexes for openpyxl
+            date_col_idx = column_index_from_string(mapping['date_col'])
             price_col_idx = column_index_from_string(mapping['price_col'])
-            value_col_idx = column_index_from_string(mapping['value_col'])
+
+            # Get current date in YYYY-MM-DD format
+            today_str = datetime.now().strftime('%Y-%m-%d')
 
             # Update the cells
+            self.sheet.cell(row=row, column=date_col_idx).value = today_str
             self.sheet.cell(
                 row=row, column=price_col_idx).value = current_price
-            self.sheet.cell(
-                row=row, column=value_col_idx).value = current_value
             logging.info(
-                f"Updated {asset} in Excel: Price=${
-                    current_price:.2f}, Value=${
-                    current_value:.2f}")
+                f"Updated {asset} in Excel: Date={today_str}, Price=${
+                    current_price:.2f}")
             return True
 
         except Exception as e:
