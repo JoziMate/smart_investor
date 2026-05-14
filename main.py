@@ -14,8 +14,7 @@ def main():
     1. Initializes market data and excel handler modules.
     2. Opens the Excel file.
     3. Fetches live prices for stocks and crypto.
-    4. Calculates required nominal/notional values.
-    5. Updates and saves the Excel file.
+    4. Updates the date and price columns and saves the Excel file.
     """
     print("--- Starting Academic Investment Portfolio Update ---")
 
@@ -23,7 +22,7 @@ def main():
     market_data = MarketDataManager()
 
     filename = "Dziennik_inwestora.xlsx"
-    sheet_name = "v2 (Instytucjonalna)"
+    sheet_name = "Pozycje otwarte"
     excel = ExcelHandler(filename, sheet_name)
 
     # 1. Load the workbook
@@ -37,21 +36,8 @@ def main():
     for ticker in stocks_to_fetch:
         price = market_data.get_stock_price(ticker)
         if price is not None:
-            # Default logic for generic stocks: Nominal value = 1 share * price
-            # (Just as an example if not shorted)
-            current_value = price
-
-            # Special requirement: Calculate the current value of shorting 50 shares of TSLA.
-            # TODO (Future PnL): Read the entry price from the Excel sheet,
-            # then calculate PnL = (Entry - Current) * 50
-            if ticker == 'TSLA':
-                current_value = 50 * price
-                logging.info(
-                    f"Calculated TSLA short liability (50 shares): ${
-                        current_value:.2f}")
-
             # Update Excel
-            excel.update_asset(ticker, price, current_value)
+            excel.update_asset(ticker, price)
         else:
             logging.error(
                 f"Failed to fetch price for {ticker}, skipping update.")
@@ -61,16 +47,8 @@ def main():
     btc_price = market_data.get_crypto_price(crypto_symbol)
 
     if btc_price is not None:
-        # Special requirement: Calculate the current notional value of a 2 BTC LONG position.
-        # TODO (Future PnL): Read the entry price from the Excel sheet to
-        # calculate PnL = (Current - Entry) * 2
-        notional_value = 2 * btc_price
-        logging.info(
-            f"Calculated BTC LONG notional value (2 BTC): ${
-                notional_value:.2f}")
-
         # Update Excel
-        excel.update_asset(crypto_symbol, btc_price, notional_value)
+        excel.update_asset(crypto_symbol, btc_price)
     else:
         logging.error(
             f"Failed to fetch price for {crypto_symbol}, skipping update.")
