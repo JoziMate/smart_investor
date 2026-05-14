@@ -1,6 +1,7 @@
 yfinance
 ccxt
 openpyxl
-google-generativeai
+google-genai
+pillow>=10.0.0
 python-dotenv
 customtkinter
