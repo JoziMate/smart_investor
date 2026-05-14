@@ -23,7 +23,7 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
 
     Returns:
         list[dict]: A list of dictionaries containing trade data:
-            [{'Ticker': '...', 'Direction': 'Long'|'Short', 'Volume': ..., 'EntryPrice': ...}, ...]
+            [{'Platform': '...', 'Ticker': '...', 'OrderType': '...', 'Direction': 'Long'|'Short', 'Volume': ..., 'Price': ..., 'Justification': '...'}, ...]
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -49,9 +49,12 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
             "The UI elements might be in Polish (e.g., 'Wolumen' for Volume, 'Instrument' for Ticker, "
             "'Kupno' for Long, 'Sprzedaż' for Short). "
             "Return ONLY a raw JSON array of dictionaries, without any markdown formatting or ```json backticks. "
-            "The output JSON keys must strictly be in English: 'Ticker', 'Direction', 'Volume', 'EntryPrice'. "
+            "The output JSON keys must strictly be in English: 'Platform', 'Ticker', 'OrderType', 'Direction', 'Volume', 'Price', 'Justification'. "
+            "The 'Platform' value should be inferred from the screenshot UI (e.g., 'Interactive Brokers', 'Binance', 'Saxo', or 'GPW Trader'). "
+            "The 'OrderType' value should be inferred (e.g., 'Market', 'Limit') or default to 'Market'. "
             "The 'Direction' value must strictly be mapped to either 'Long' or 'Short'. "
-            "Volume and EntryPrice should be numeric if possible."
+            "The 'Volume' and 'Price' values must strictly be formatted as numerical values (floats/integers) rather than strings. "
+            "The 'Justification' value should be a very brief, 1-sentence technical justification generated based on the extracted data (e.g., 'Zajęcie pozycji zgodnie ze strategią v2')."
         )
 
         logging.info("Sending request to Gemini API...")

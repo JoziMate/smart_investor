@@ -126,10 +126,10 @@ class ExcelHandler:
     def append_new_position(self, trade_data: dict) -> bool:
         """
         Appends new trade data to the first completely empty row (based on empty Column A)
-        in the "Pozycje otwarte" sheet.
+        in the current sheet.
 
         Args:
-            trade_data (dict): The trade data with keys 'Ticker', 'Direction', 'Volume', 'EntryPrice'.
+            trade_data (dict): The trade data with keys 'Platform', 'Ticker', 'OrderType', 'Direction', 'Volume', 'Price', 'Justification'.
 
         Returns:
             bool: True if successful, False otherwise.
@@ -139,13 +139,10 @@ class ExcelHandler:
                 "Cannot append position: Workbook or sheet is not loaded.")
             return False
 
-        if self.sheet_name != "Pozycje otwarte":
-            logging.warning(
-                f"Attempting to append position to sheet '{self.sheet_name}' instead of 'Pozycje otwarte'.")
-
         try:
             # Find the first row where Column A is empty
-            empty_row = 1
+            # Start from row 5 as per "Trejdy" sheet requirements.
+            empty_row = 5
             while self.sheet.cell(row=empty_row, column=1).value is not None:
                 empty_row += 1
 
@@ -154,16 +151,22 @@ class ExcelHandler:
 
             # Map columns according to requirements:
             # Column A = Date
+            # Column B = Platform
             # Column C = Ticker
-            # Column D = Direction
-            # Column E = Volume
-            # Column F = Entry Price
+            # Column D = Order Type
+            # Column E = Direction
+            # Column F = Volume
+            # Column G = Price
+            # Column I = Justification
 
             self.sheet.cell(row=empty_row, column=1).value = today_str
+            self.sheet.cell(row=empty_row, column=2).value = trade_data.get('Platform', '')
             self.sheet.cell(row=empty_row, column=3).value = trade_data.get('Ticker', '')
-            self.sheet.cell(row=empty_row, column=4).value = trade_data.get('Direction', '')
-            self.sheet.cell(row=empty_row, column=5).value = trade_data.get('Volume', '')
-            self.sheet.cell(row=empty_row, column=6).value = trade_data.get('EntryPrice', '')
+            self.sheet.cell(row=empty_row, column=4).value = trade_data.get('OrderType', '')
+            self.sheet.cell(row=empty_row, column=5).value = trade_data.get('Direction', '')
+            self.sheet.cell(row=empty_row, column=6).value = trade_data.get('Volume', '')
+            self.sheet.cell(row=empty_row, column=7).value = trade_data.get('Price', '')
+            self.sheet.cell(row=empty_row, column=9).value = trade_data.get('Justification', '')
 
             logging.info(
                 f"Appended new position at row {empty_row}: {trade_data}")

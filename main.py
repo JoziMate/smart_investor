@@ -33,17 +33,17 @@ def main():
     print("--- Starting Academic Investment Portfolio Update ---")
 
     filename = "Dziennik_inwestora.xlsx"
-    sheet_name = "Pozycje otwarte"
-    excel = ExcelHandler(filename, sheet_name)
-
-    # 1. Load the workbook
-    if not excel.load_workbook():
-        logging.critical(
-            "Exiting: Could not load the Excel workbook. Please check file path and permissions.")
-        return
 
     if args.vision:
         # Vision Mode
+        sheet_name = "Trejdy"
+        excel = ExcelHandler(filename, sheet_name)
+
+        if not excel.load_workbook():
+            logging.critical(
+                "Exiting: Could not load the Excel workbook. Please check file path and permissions.")
+            return
+
         logging.info(f"Running in Vision Mode with image: {args.vision}")
         trades = extract_trades_from_image(args.vision)
 
@@ -60,6 +60,14 @@ def main():
 
     elif args.update:
         # Standard Update Mode
+        sheet_name = "Pozycje otwarte"
+        excel = ExcelHandler(filename, sheet_name)
+
+        if not excel.load_workbook():
+            logging.critical(
+                "Exiting: Could not load the Excel workbook. Please check file path and permissions.")
+            return
+
         logging.info("Running in Standard Market Update Mode.")
         market_data = MarketDataManager()
 

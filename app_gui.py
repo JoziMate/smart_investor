@@ -12,6 +12,7 @@ from vision_parser import extract_trades_from_image
 # Constants
 EXCEL_FILENAME = "Dziennik_inwestora.xlsx"
 EXCEL_SHEET_NAME_OPEN_POS = "Pozycje otwarte"
+EXCEL_SHEET_NAME_TRADES = "Trejdy"
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -196,7 +197,7 @@ class SmartInwestorApp(ctk.CTk):
         Background thread logic for scanning screenshot via Gemini AI and appending trades.
         """
         try:
-            excel = ExcelHandler(EXCEL_FILENAME, EXCEL_SHEET_NAME_OPEN_POS)
+            excel = ExcelHandler(EXCEL_FILENAME, EXCEL_SHEET_NAME_TRADES)
 
             if not excel.load_workbook():
                 logging.critical("Could not load the Excel workbook. Please check file path and permissions.")
