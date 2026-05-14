@@ -3,3 +3,4 @@ ccxt
 openpyxl
 google-generativeai
 python-dotenv
+customtkinter
