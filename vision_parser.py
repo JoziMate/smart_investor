@@ -1,7 +1,9 @@
 import os
 import json
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import errors
+from PIL import Image
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -28,15 +30,18 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
         logging.error("GEMINI_API_KEY is not set in the environment or .env file.")
         return []
 
-    genai.configure(api_key=api_key)
+    # The new SDK automatically picks up GEMINI_API_KEY from environment,
+    # or you can pass it explicitly. We rely on the env var after load_dotenv().
+    client = genai.Client()
 
     try:
-        # Load the model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-
-        # Upload the file
-        logging.info(f"Uploading image: {image_path}")
-        sample_file = genai.upload_file(path=image_path)
+        # Load the image locally
+        logging.info(f"Loading image locally: {image_path}")
+        try:
+            image = Image.open(image_path)
+        except Exception as e:
+            logging.error(f"Failed to load image {image_path}: {e}")
+            return []
 
         # Craft the prompt
         prompt = (
@@ -50,7 +55,10 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
         )
 
         logging.info("Sending request to Gemini API...")
-        response = model.generate_content([sample_file, prompt])
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[image, prompt]
+        )
 
         # Parse the JSON response
         response_text = response.text.strip()
@@ -76,6 +84,9 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
             logging.debug(f"Raw response was: {response_text}")
             return []
 
+    except errors.APIError as e:
+        logging.error(f"API Error during vision parsing: {e}")
+        return []
     except Exception as e:
         logging.error(f"Error during vision parsing: {e}")
         return []
