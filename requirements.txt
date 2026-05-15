@@ -5,3 +5,5 @@ google-genai
 pillow>=10.0.0
 python-dotenv
 customtkinter
+pytest
+pytest-mock

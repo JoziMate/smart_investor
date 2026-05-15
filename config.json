@@ -1,0 +1,11 @@
+{
+    "EXCEL_FILENAME": "Dziennik_inwestora.xlsx",
+    "EXCEL_SHEET_NAME_OPEN_POS": "Pozycje otwarte",
+    "EXCEL_SHEET_NAME_TRADES": "Trejdy",
+    "ASSET_MAPPING": {
+        "MSFT": {"row": 16, "date_col": "A", "price_col": "G"},
+        "GOOGL": {"row": 17, "date_col": "A", "price_col": "G"},
+        "TSLA": {"row": 24, "date_col": "A", "price_col": "G"},
+        "BTC/USDT": {"row": 25, "date_col": "A", "price_col": "G"}
+    }
+}

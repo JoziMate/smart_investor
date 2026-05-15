@@ -1,12 +1,9 @@
 import yfinance as yf
 import ccxt
 import logging
+import logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s')
-
+logger_inst = logging.getLogger(__name__)
 
 class MarketDataManager:
     """
@@ -39,10 +36,10 @@ class MarketDataManager:
                 price = todays_data['Close'].iloc[0]
                 return float(price)
             else:
-                logging.warning(f"No price data found for stock: {ticker}")
+                logger_inst.warning(f"No price data found for stock: {ticker}")
                 return None
         except Exception as e:
-            logging.error(f"Error fetching stock price for {ticker}: {e}")
+            logger_inst.error(f"Error fetching stock price for {ticker}: {e}")
             return None
 
     def get_crypto_price(self, symbol: str) -> float | None:
@@ -60,18 +57,18 @@ class MarketDataManager:
             if ticker and 'last' in ticker:
                 return float(ticker['last'])
             else:
-                logging.warning(
+                logger_inst.warning(
                     f"No last price found in ticker data for {symbol}")
                 return None
         except ccxt.NetworkError as e:
-            logging.error(
+            logger_inst.error(
                 f"Network error while fetching crypto price for {symbol}: {e}")
             return None
         except ccxt.ExchangeError as e:
-            logging.error(
+            logger_inst.error(
                 f"Exchange error while fetching crypto price for {symbol}: {e}")
             return None
         except Exception as e:
-            logging.error(
+            logger_inst.error(
                 f"Unexpected error fetching crypto price for {symbol}: {e}")
             return None
