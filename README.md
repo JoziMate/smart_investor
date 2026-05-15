@@ -26,7 +26,7 @@ System został napisany w języku Python z naciskiem na modularność i rygoryst
 
 1. **Sklonuj repozytorium:**
    ```bash
-   git clone <link-do-repozytorium>
+   git clone https://github.com/JoziMate/smart_investor
    cd smart_investor
    ```
 
