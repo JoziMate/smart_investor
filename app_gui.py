@@ -386,23 +386,15 @@ class SmartInwestorApp(ctk.CTk):
 
             market_data = MarketDataManager()
 
-            # Process Stocks (yfinance)
-            stocks_to_fetch = ['MSFT', 'GOOGL', 'TSLA']
-            for ticker in stocks_to_fetch:
-                price = market_data.get_stock_price(ticker)
+            # Process All Assets dynamically
+            assets_to_fetch = list(config.get("ASSET_MAPPING", {}).keys())
+            prices = market_data.get_all_prices(assets_to_fetch)
+
+            for ticker, price in prices.items():
                 if price is not None:
                     excel.update_asset(ticker, price)
                 else:
                     logging.error(f"Failed to fetch price for {ticker}, skipping update.")
-
-            # Process Crypto (ccxt)
-            crypto_symbol = 'BTC/USDT'
-            btc_price = market_data.get_crypto_price(crypto_symbol)
-
-            if btc_price is not None:
-                excel.update_asset(crypto_symbol, btc_price)
-            else:
-                logging.error(f"Failed to fetch price for {crypto_symbol}, skipping update.")
 
             # Save workbook
             if excel.save_workbook():

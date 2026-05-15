@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 
+from app_gui import SmartInwestorApp
 from config_manager import config
 from excel_handler import ExcelHandler
 import logger  # Configures the root logger
@@ -21,7 +22,6 @@ def main():
 
     # If no arguments were passed, launch the GUI
     if len(sys.argv) == 1:
-        from app_gui import SmartInwestorApp
         app = SmartInwestorApp()
         app.mainloop()
         return
