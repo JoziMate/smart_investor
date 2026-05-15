@@ -8,11 +8,8 @@ from tkinter import filedialog
 from market_data import MarketDataManager
 from excel_handler import ExcelHandler
 from vision_parser import extract_trades_from_image
-
-# Constants
-EXCEL_FILENAME = "Dziennik_inwestora.xlsx"
-EXCEL_SHEET_NAME_OPEN_POS = "Pozycje otwarte"
-EXCEL_SHEET_NAME_TRADES = "Trejdy"
+from config_manager import config
+import logger  # Initializes the root logger with File and Stream handlers
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -96,15 +93,15 @@ class SmartInwestorApp(ctk.CTk):
         """
         # Configure custom logging handler
         queue_handler = QueueLoggingHandler(self.log_queue)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
         queue_handler.setFormatter(formatter)
 
         # Get the root logger and add our handler
         root_logger = logging.getLogger()
         root_logger.addHandler(queue_handler)
-        root_logger.setLevel(logging.INFO)
+        # Root logger level is already configured in logger.py
 
-        # Redirect stdout
+        # Redirect stdout (optional now, since print is replaced, but keeps traceback routing)
         sys.stdout = StdoutRedirector(self.log_queue)
 
     def poll_log_queue(self):
@@ -127,7 +124,7 @@ class SmartInwestorApp(ctk.CTk):
         """
         self.api_button.configure(state="disabled")
         self.vision_button.configure(state="disabled")
-        print("--- Starting Market Prices Update ---")
+        logging.info("--- Starting Market Prices Update ---")
 
         thread = threading.Thread(target=self._run_update_portfolio_api, daemon=True)
         thread.start()
@@ -137,7 +134,7 @@ class SmartInwestorApp(ctk.CTk):
         Background thread logic for updating portfolio via API.
         """
         try:
-            excel = ExcelHandler(EXCEL_FILENAME, EXCEL_SHEET_NAME_OPEN_POS)
+            excel = ExcelHandler(config["EXCEL_FILENAME"], config["EXCEL_SHEET_NAME_OPEN_POS"])
 
             if not excel.load_workbook():
                 logging.critical("Could not load the Excel workbook. Please check file path and permissions.")
@@ -165,9 +162,9 @@ class SmartInwestorApp(ctk.CTk):
 
             # Save workbook
             if excel.save_workbook():
-                print("--- Market Prices Update completed successfully ---")
+                logging.info("--- Market Prices Update completed successfully ---")
             else:
-                print("--- Market Prices Update failed during save ---")
+                logging.error("--- Market Prices Update failed during save ---")
         except Exception as e:
             logging.error(f"An unexpected error occurred during Market Prices Update: {e}")
         finally:
@@ -187,7 +184,7 @@ class SmartInwestorApp(ctk.CTk):
 
         self.api_button.configure(state="disabled")
         self.vision_button.configure(state="disabled")
-        print(f"--- Starting AI analysis for file: {os.path.basename(file_path)} ---")
+        logging.info(f"--- Starting AI analysis for file: {os.path.basename(file_path)} ---")
 
         thread = threading.Thread(target=self._run_scan_screenshot_ai, args=(file_path,), daemon=True)
         thread.start()
@@ -197,7 +194,7 @@ class SmartInwestorApp(ctk.CTk):
         Background thread logic for scanning screenshot via Gemini AI and appending trades.
         """
         try:
-            excel = ExcelHandler(EXCEL_FILENAME, EXCEL_SHEET_NAME_TRADES)
+            excel = ExcelHandler(config["EXCEL_FILENAME"], config["EXCEL_SHEET_NAME_TRADES"])
 
             if not excel.load_workbook():
                 logging.critical("Could not load the Excel workbook. Please check file path and permissions.")
@@ -210,9 +207,9 @@ class SmartInwestorApp(ctk.CTk):
                     excel.append_new_position(trade)
 
                 if excel.save_workbook():
-                    print("--- AI analysis and file save completed successfully ---")
+                    logging.info("--- AI analysis and file save completed successfully ---")
                 else:
-                    print("--- File save failed after AI analysis ---")
+                    logging.error("--- File save failed after AI analysis ---")
             else:
                 logging.warning("Failed to extract trades from the image or an error occurred. Workbook not saved.")
         except Exception as e:

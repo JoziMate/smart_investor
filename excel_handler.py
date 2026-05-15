@@ -2,22 +2,12 @@ import openpyxl
 from openpyxl.utils import column_index_from_string
 import logging
 from datetime import datetime
+from config_manager import config
+import logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s')
+logger_inst = logging.getLogger(__name__)
 
-# Configuration dictionary for mapping assets to their specific locations in the Excel sheet
-# Users can easily adjust the row and column letters below to match their
-# real spreadsheet layout.
-ASSET_MAPPING = {
-    'MSFT': {'row': 16, 'date_col': 'A', 'price_col': 'G'},
-    'GOOGL': {'row': 17, 'date_col': 'A', 'price_col': 'G'},
-    'TSLA': {'row': 24, 'date_col': 'A', 'price_col': 'G'},
-    'BTC/USDT': {'row': 25, 'date_col': 'A', 'price_col': 'G'},
-}
-
+ASSET_MAPPING = config["ASSET_MAPPING"]
 
 class ExcelHandler:
     """
@@ -50,13 +40,13 @@ class ExcelHandler:
 
             if self.sheet_name in self.workbook.sheetnames:
                 self.sheet = self.workbook[self.sheet_name]
-                logging.info(
+                logger_inst.info(
                     f"Successfully loaded sheet '{
                         self.sheet_name}' from {
                         self.filename}")
                 return True
             else:
-                logging.error(
+                logger_inst.error(
                     f"Sheet '{
                         self.sheet_name}' not found in {
                         self.filename}. Available sheets: {
@@ -64,15 +54,15 @@ class ExcelHandler:
                 return False
 
         except FileNotFoundError:
-            logging.error(f"File not found: {self.filename}")
+            logger_inst.error(f"File not found: {self.filename}")
             return False
         except PermissionError:
-            logging.error(
+            logger_inst.error(
                 f"Permission denied: {
                     self.filename}. Is the file open in another program?")
             return False
         except Exception as e:
-            logging.error(f"Unexpected error loading {self.filename}: {e}")
+            logger_inst.error(f"Unexpected error loading {self.filename}: {e}")
             return False
 
     def update_asset(
@@ -90,12 +80,12 @@ class ExcelHandler:
             bool: True if the update was successful, False otherwise.
         """
         if self.sheet is None:
-            logging.error(
+            logger_inst.error(
                 "Cannot update asset: Workbook or sheet is not loaded.")
             return False
 
         if asset not in ASSET_MAPPING:
-            logging.warning(
+            logger_inst.warning(
                 f"Asset '{asset}' not found in ASSET_MAPPING configuration.")
             return False
 
@@ -114,13 +104,13 @@ class ExcelHandler:
             self.sheet.cell(row=row, column=date_col_idx).value = today_str
             self.sheet.cell(
                 row=row, column=price_col_idx).value = current_price
-            logging.info(
+            logger_inst.info(
                 f"Updated {asset} in Excel: Date={today_str}, Price=${
                     current_price:.2f}")
             return True
 
         except Exception as e:
-            logging.error(f"Failed to update cells for {asset}: {e}")
+            logger_inst.error(f"Failed to update cells for {asset}: {e}")
             return False
 
     def append_new_position(self, trade_data: dict) -> bool:
@@ -135,7 +125,7 @@ class ExcelHandler:
             bool: True if successful, False otherwise.
         """
         if self.sheet is None:
-            logging.error(
+            logger_inst.error(
                 "Cannot append position: Workbook or sheet is not loaded.")
             return False
 
@@ -168,12 +158,12 @@ class ExcelHandler:
             self.sheet.cell(row=empty_row, column=7).value = trade_data.get('Price', '')
             self.sheet.cell(row=empty_row, column=9).value = trade_data.get('Justification', '')
 
-            logging.info(
+            logger_inst.info(
                 f"Appended new position at row {empty_row}: {trade_data}")
             return True
 
         except Exception as e:
-            logging.error(f"Failed to append new position: {e}")
+            logger_inst.error(f"Failed to append new position: {e}")
             return False
 
     def save_workbook(self) -> bool:
@@ -184,18 +174,18 @@ class ExcelHandler:
             bool: True if successful, False otherwise.
         """
         if self.workbook is None:
-            logging.error("Cannot save: Workbook is not loaded.")
+            logger_inst.error("Cannot save: Workbook is not loaded.")
             return False
 
         try:
             self.workbook.save(self.filename)
-            logging.info(f"Successfully saved changes to {self.filename}")
+            logger_inst.info(f"Successfully saved changes to {self.filename}")
             return True
         except PermissionError:
-            logging.error(
+            logger_inst.error(
                 f"Permission denied while saving {
                     self.filename}. Please close the file if it is open in Excel.")
             return False
         except Exception as e:
-            logging.error(f"Unexpected error saving {self.filename}: {e}")
+            logger_inst.error(f"Unexpected error saving {self.filename}: {e}")
             return False

@@ -5,14 +5,12 @@ from google import genai
 from google.genai import errors
 from PIL import Image
 from dotenv import load_dotenv
+import logger
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s')
+logger_inst = logging.getLogger(__name__)
 
 def extract_trades_from_image(image_path: str) -> list[dict]:
     """
@@ -27,7 +25,7 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        logging.error("GEMINI_API_KEY is not set in the environment or .env file.")
+        logger_inst.error("GEMINI_API_KEY is not set in the environment or .env file.")
         return []
 
     # The new SDK automatically picks up GEMINI_API_KEY from environment,
@@ -36,11 +34,11 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
 
     try:
         # Load the image locally
-        logging.info(f"Loading image locally: {image_path}")
+        logger_inst.info(f"Loading image locally: {image_path}")
         try:
             image = Image.open(image_path)
         except Exception as e:
-            logging.error(f"Failed to load image {image_path}: {e}")
+            logger_inst.error(f"Failed to load image {image_path}: {e}")
             return []
 
         # Craft the prompt
@@ -57,7 +55,7 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
             "The 'Justification' value should be a very brief, 1-sentence technical justification generated based on the extracted data (e.g., 'Zajęcie pozycji zgodnie ze strategią v2')."
         )
 
-        logging.info("Sending request to Gemini API...")
+        logger_inst.info("Sending request to Gemini API...")
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[image, prompt]
@@ -79,17 +77,17 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
         try:
             trades = json.loads(response_text)
             if not isinstance(trades, list):
-                logging.error(f"Expected a JSON array, got: {type(trades)}")
+                logger_inst.error(f"Expected a JSON array, got: {type(trades)}")
                 return []
             return trades
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse JSON response: {e}")
-            logging.debug(f"Raw response was: {response_text}")
+            logger_inst.error(f"Failed to parse JSON response: {e}")
+            logger_inst.debug(f"Raw response was: {response_text}")
             return []
 
     except errors.APIError as e:
-        logging.error(f"API Error during vision parsing: {e}")
+        logger_inst.error(f"API Error during vision parsing: {e}")
         return []
     except Exception as e:
-        logging.error(f"Error during vision parsing: {e}")
+        logger_inst.error(f"Error during vision parsing: {e}")
         return []

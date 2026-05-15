@@ -3,12 +3,8 @@ import argparse
 from market_data import MarketDataManager
 from excel_handler import ExcelHandler
 from vision_parser import extract_trades_from_image
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s')
-
+from config_manager import config
+import logger  # Configures the root logger
 
 def main():
     """
@@ -30,13 +26,13 @@ def main():
 
     args = parser.parse_args()
 
-    print("--- Starting Academic Investment Portfolio Update ---")
+    logging.info("--- Starting Academic Investment Portfolio Update ---")
 
-    filename = "Dziennik_inwestora.xlsx"
+    filename = config["EXCEL_FILENAME"]
 
     if args.vision:
         # Vision Mode
-        sheet_name = "Trejdy"
+        sheet_name = config["EXCEL_SHEET_NAME_TRADES"]
         excel = ExcelHandler(filename, sheet_name)
 
         if not excel.load_workbook():
@@ -52,15 +48,15 @@ def main():
                 excel.append_new_position(trade)
 
             if excel.save_workbook():
-                print("--- Vision parsing and update completed successfully ---")
+                logging.info("--- Vision parsing and update completed successfully ---")
             else:
-                print("--- Update failed during save ---")
+                logging.error("--- Update failed during save ---")
         else:
             logging.warning("No trades were extracted or an error occurred. Workbook not saved.")
 
     elif args.update:
         # Standard Update Mode
-        sheet_name = "Pozycje otwarte"
+        sheet_name = config["EXCEL_SHEET_NAME_OPEN_POS"]
         excel = ExcelHandler(filename, sheet_name)
 
         if not excel.load_workbook():
@@ -95,9 +91,9 @@ def main():
 
         # 4. Save the workbook
         if excel.save_workbook():
-            print("--- Update completed successfully ---")
+            logging.info("--- Update completed successfully ---")
         else:
-            print("--- Update failed during save ---")
+            logging.error("--- Update failed during save ---")
 
 
 if __name__ == "__main__":
