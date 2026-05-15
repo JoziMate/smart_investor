@@ -2,6 +2,8 @@ import openpyxl
 from openpyxl.utils import column_index_from_string
 import logging
 from datetime import datetime
+import os
+import pandas as pd
 from config_manager import config
 import logger
 
@@ -189,3 +191,55 @@ class ExcelHandler:
         except Exception as e:
             logger_inst.error(f"Unexpected error saving {self.filename}: {e}")
             return False
+
+    @staticmethod
+    def get_dashboard_data(filename: str) -> pd.DataFrame:
+        """
+        Reads the 'Pozycje otwarte' sheet and returns a clean pandas DataFrame for the dashboard.
+        Skips completely empty rows.
+        """
+        try:
+            df = pd.read_excel(filename, sheet_name=config.get("EXCEL_SHEET_NAME_OPEN_POS", "Pozycje otwarte"))
+            # Drop completely empty rows
+            df.dropna(how='all', inplace=True)
+            return df
+        except Exception as e:
+            logger_inst.error(f"Error reading dashboard data: {e}")
+            return pd.DataFrame()
+
+    @staticmethod
+    def export_reports(filename: str) -> bool:
+        """
+        Exports 'Pozycje otwarte' and 'Trejdy' sheets to CSV files in the exports/ directory.
+        """
+        export_dir = os.path.join(os.path.dirname(__file__), 'exports')
+        os.makedirs(export_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        success = True
+
+        try:
+            # Export 'Pozycje otwarte'
+            open_pos_sheet = config.get("EXCEL_SHEET_NAME_OPEN_POS", "Pozycje otwarte")
+            df_open_pos = pd.read_excel(filename, sheet_name=open_pos_sheet)
+            df_open_pos.dropna(how='all', inplace=True)
+            open_pos_filename = os.path.join(export_dir, f'portfolio_snapshot_{timestamp}_{open_pos_sheet}.csv')
+            df_open_pos.to_csv(open_pos_filename, index=False, encoding='utf-8')
+            logger_inst.info(f"Successfully exported {open_pos_sheet} to {open_pos_filename}")
+        except Exception as e:
+            logger_inst.error(f"Failed to export {open_pos_sheet}: {e}")
+            success = False
+
+        try:
+            # Export 'Trejdy'
+            trades_sheet = config.get("EXCEL_SHEET_NAME_TRADES", "Trejdy")
+            df_trades = pd.read_excel(filename, sheet_name=trades_sheet)
+            df_trades.dropna(how='all', inplace=True)
+            trades_filename = os.path.join(export_dir, f'portfolio_snapshot_{timestamp}_{trades_sheet}.csv')
+            df_trades.to_csv(trades_filename, index=False, encoding='utf-8')
+            logger_inst.info(f"Successfully exported {trades_sheet} to {trades_filename}")
+        except Exception as e:
+            logger_inst.error(f"Failed to export {trades_sheet}: {e}")
+            success = False
+
+        return success

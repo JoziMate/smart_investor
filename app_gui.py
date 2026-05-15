@@ -3,13 +3,15 @@ import sys
 import queue
 import logging
 import threading
+import pandas as pd
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 from market_data import MarketDataManager
 from excel_handler import ExcelHandler
 from vision_parser import extract_trades_from_image
-from config_manager import config
+from config_manager import config, save_config
 import logger  # Initializes the root logger with File and Stream handlers
+import dotenv
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -52,33 +54,76 @@ class SmartInwestorApp(ctk.CTk):
         super().__init__()
 
         self.title("Gra Inwestycyjna - Portfolio Manager")
-        self.geometry("600x500")
+        self.geometry("900x700")
 
         # Layout configuration
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1) # The dashboard area
+        self.grid_rowconfigure(5, weight=1) # The log area
 
-        # 1. Header
+        # 1. Header Frame (for title and settings button)
+        self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, pady=(20, 10), sticky="ew")
+        self.header_frame.grid_columnconfigure(0, weight=1)
+
         self.header_label = ctk.CTkLabel(
-            self, text="Gra Inwestycyjna - Portfolio Manager", font=ctk.CTkFont(size=24, weight="bold")
+            self.header_frame, text="Gra Inwestycyjna - Portfolio Manager", font=ctk.CTkFont(size=24, weight="bold")
         )
-        self.header_label.grid(row=0, column=0, pady=(20, 10))
+        self.header_label.grid(row=0, column=0)
 
-        # 2. Button 1: Aktualizuj portfel z API
+        # Settings Button
+        self.settings_button = ctk.CTkButton(
+            self.header_frame, text="⚙️ Ustawienia", command=self.open_settings_window, width=120
+        )
+        self.settings_button.grid(row=0, column=1, padx=20)
+
+        # 2. Buttons Frame
+        self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.buttons_frame.grid(row=1, column=0, pady=(10, 10))
+
         self.api_button = ctk.CTkButton(
-            self, text="Update Market Prices", command=self.update_portfolio_api
+            self.buttons_frame, text="Update Market Prices", command=self.update_portfolio_api
         )
-        self.api_button.grid(row=1, column=0, pady=(10, 10))
+        self.api_button.grid(row=0, column=0, padx=10)
 
-        # 3. Button 2: Skanuj zrzut ekranu - AI
         self.vision_button = ctk.CTkButton(
-            self, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
+            self.buttons_frame, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
         )
-        self.vision_button.grid(row=2, column=0, pady=(10, 20))
+        self.vision_button.grid(row=0, column=1, padx=10)
+
+        self.export_button = ctk.CTkButton(
+            self.buttons_frame, text="Eksportuj Raport", command=self.export_reports
+        )
+        self.export_button.grid(row=0, column=2, padx=10)
+
+        # 3. Dashboard Frame (Treeview)
+        self.dashboard_frame = ctk.CTkFrame(self)
+        self.dashboard_frame.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="nsew")
+        self.dashboard_frame.grid_columnconfigure(0, weight=1)
+        self.dashboard_frame.grid_rowconfigure(1, weight=1)
+
+        self.dashboard_header_frame = ctk.CTkFrame(self.dashboard_frame, fg_color="transparent")
+        self.dashboard_header_frame.grid(row=0, column=0, sticky="ew", pady=(5, 5), padx=5)
+        self.dashboard_header_frame.grid_columnconfigure(0, weight=1)
+
+        self.dashboard_label = ctk.CTkLabel(
+            self.dashboard_header_frame, text="Pozycje Otwarte - Dashboard", font=ctk.CTkFont(size=16, weight="bold")
+        )
+        self.dashboard_label.grid(row=0, column=0, sticky="w")
+
+        self.refresh_button = ctk.CTkButton(
+            self.dashboard_header_frame, text="Odśwież widok", command=self.load_dashboard_data, width=100
+        )
+        self.refresh_button.grid(row=0, column=1, sticky="e")
+
+        self.setup_treeview()
 
         # 4. Console Log (Textbox)
-        self.log_textbox = ctk.CTkTextbox(self, state="disabled")
-        self.log_textbox.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="nsew")
+        self.log_textbox = ctk.CTkTextbox(self, state="disabled", height=150)
+        self.log_textbox.grid(row=5, column=0, padx=20, pady=(0, 20), sticky="nsew")
+
+        # Initial load of dashboard
+        self.load_dashboard_data()
 
         # Setup Logging
         self.log_queue = queue.Queue()
@@ -86,6 +131,205 @@ class SmartInwestorApp(ctk.CTk):
 
         # Start polling the queue for log messages
         self.after(100, self.poll_log_queue)
+
+    def setup_treeview(self):
+        """
+        Sets up the ttk.Treeview with a dark theme.
+        """
+        style = ttk.Style()
+        style.theme_use("default")
+
+        # Configure colors for dark theme
+        bg_color = "#2b2b2b"
+        fg_color = "#dce4ee"
+        selected_bg = "#1f538d"
+
+        style.configure("Treeview",
+                        background=bg_color,
+                        foreground=fg_color,
+                        fieldbackground=bg_color,
+                        rowheight=25,
+                        borderwidth=0)
+
+        style.map("Treeview",
+                  background=[('selected', selected_bg)])
+
+        style.configure("Treeview.Heading",
+                        background="#3b3b3b",
+                        foreground=fg_color,
+                        font=('Arial', 10, 'bold'),
+                        borderwidth=1)
+
+        style.map("Treeview.Heading",
+                  background=[('active', "#4b4b4b")])
+
+        # Treeview Scrollbar
+        self.tree_scroll = ttk.Scrollbar(self.dashboard_frame)
+        self.tree_scroll.grid(row=1, column=1, sticky="ns")
+
+        self.tree = ttk.Treeview(self.dashboard_frame, yscrollcommand=self.tree_scroll.set, selectmode="browse")
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        self.tree_scroll.config(command=self.tree.yview)
+
+    def load_dashboard_data(self):
+        """
+        Loads data from the Excel file and updates the Treeview.
+        """
+        try:
+            df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"])
+
+            # Clear existing data
+            self.tree.delete(*self.tree.get_children())
+
+            if df.empty:
+                return
+
+            # Setup columns based on dataframe
+            columns = list(df.columns)
+            self.tree["columns"] = columns
+            self.tree["show"] = "headings"
+
+            for col in columns:
+                self.tree.heading(col, text=str(col))
+                # Auto-adjust column width based on header length (approx)
+                self.tree.column(col, width=max(100, len(str(col)) * 10), anchor="center")
+
+            # Insert data rows
+            for _, row in df.iterrows():
+                values = ["" if pd.isna(v) else str(v) for v in row.tolist()]
+                self.tree.insert("", "end", values=values)
+
+        except Exception as e:
+            logging.error(f"Failed to load dashboard data: {e}")
+
+    def export_reports(self):
+        """
+        Exports 'Pozycje otwarte' and 'Trejdy' to CSV files.
+        """
+        self.export_button.configure(state="disabled")
+        logging.info("--- Starting Export to CSV ---")
+
+        def _run_export():
+            success = ExcelHandler.export_reports(config["EXCEL_FILENAME"])
+            if success:
+                logging.info("--- Export Completed Successfully ---")
+            else:
+                logging.error("--- Export Failed ---")
+            self.after(0, lambda: self.export_button.configure(state="normal"))
+
+        thread = threading.Thread(target=_run_export, daemon=True)
+        thread.start()
+
+    def open_settings_window(self):
+        """
+        Opens a Toplevel window for Settings (API Key and ASSET_MAPPING).
+        """
+        if hasattr(self, "settings_window") and self.settings_window is not None and self.settings_window.winfo_exists():
+            self.settings_window.focus()
+            return
+
+        self.settings_window = ctk.CTkToplevel(self)
+        self.settings_window.title("Ustawienia")
+        self.settings_window.geometry("500x500")
+
+        # Bring to front
+        self.settings_window.attributes("-topmost", True)
+        self.after(100, lambda: self.settings_window.attributes("-topmost", False))
+
+        # 1. API Key Section
+        api_frame = ctk.CTkFrame(self.settings_window)
+        api_frame.pack(fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(api_frame, text="Gemini API Key:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 0))
+        self.api_key_entry = ctk.CTkEntry(api_frame, show="*")
+        self.api_key_entry.pack(fill="x", padx=10, pady=10)
+
+        # Load current API Key
+        current_api_key = os.getenv("GEMINI_API_KEY", "")
+        if current_api_key:
+            self.api_key_entry.insert(0, current_api_key)
+
+        # 2. Add New Asset Mapping Section
+        mapping_frame = ctk.CTkFrame(self.settings_window)
+        mapping_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        ctk.CTkLabel(mapping_frame, text="Add/Update Asset Mapping:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 10))
+
+        # Grid for mapping inputs
+        input_grid = ctk.CTkFrame(mapping_frame, fg_color="transparent")
+        input_grid.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(input_grid, text="Ticker:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.ticker_entry = ctk.CTkEntry(input_grid, width=100)
+        self.ticker_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ctk.CTkLabel(input_grid, text="Row:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.row_entry = ctk.CTkEntry(input_grid, width=100)
+        self.row_entry.grid(row=0, column=3, padx=5, pady=5)
+
+        ctk.CTkLabel(input_grid, text="Date Col:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.date_col_entry = ctk.CTkEntry(input_grid, width=100)
+        self.date_col_entry.grid(row=1, column=1, padx=5, pady=5)
+        self.date_col_entry.insert(0, "A") # Default
+
+        ctk.CTkLabel(input_grid, text="Price Col:").grid(row=1, column=2, padx=5, pady=5, sticky="e")
+        self.price_col_entry = ctk.CTkEntry(input_grid, width=100)
+        self.price_col_entry.grid(row=1, column=3, padx=5, pady=5)
+        self.price_col_entry.insert(0, "G") # Default
+
+        # 3. Save Button
+        save_btn = ctk.CTkButton(self.settings_window, text="Save & Apply", command=self.save_settings)
+        save_btn.pack(pady=20)
+
+    def save_settings(self):
+        """
+        Saves the API Key to .env and Asset Mapping to config.json.
+        """
+        # Save API Key
+        new_api_key = self.api_key_entry.get().strip()
+        if new_api_key:
+            env_file = os.path.join(os.path.dirname(__file__), '.env')
+            if not os.path.exists(env_file):
+                open(env_file, 'w').close()
+            dotenv.set_key(env_file, "GEMINI_API_KEY", new_api_key)
+            os.environ["GEMINI_API_KEY"] = new_api_key
+            logging.info("GEMINI_API_KEY updated successfully.")
+
+        # Save Mapping
+        ticker = self.ticker_entry.get().strip()
+        row_str = self.row_entry.get().strip()
+        date_col = self.date_col_entry.get().strip()
+        price_col = self.price_col_entry.get().strip()
+
+        if ticker and row_str and date_col and price_col:
+            try:
+                row = int(row_str)
+                # Update local config dict
+                if "ASSET_MAPPING" not in config:
+                    config["ASSET_MAPPING"] = {}
+
+                config["ASSET_MAPPING"][ticker] = {
+                    "row": row,
+                    "date_col": date_col,
+                    "price_col": price_col
+                }
+
+                # Save to config.json
+                save_config(config)
+                logging.info(f"Asset mapping for {ticker} updated and saved.")
+
+                # Clear mapping inputs
+                self.ticker_entry.delete(0, 'end')
+                self.row_entry.delete(0, 'end')
+                self.date_col_entry.delete(0, 'end')
+                self.date_col_entry.insert(0, "A")
+                self.price_col_entry.delete(0, 'end')
+                self.price_col_entry.insert(0, "G")
+
+            except ValueError:
+                logging.error("Row must be an integer.")
+
+        self.settings_window.destroy()
 
     def setup_logging(self):
         """
@@ -169,6 +413,7 @@ class SmartInwestorApp(ctk.CTk):
             logging.error(f"An unexpected error occurred during Market Prices Update: {e}")
         finally:
             self.after(0, self._restore_buttons)
+            self.after(0, self.load_dashboard_data)
 
     def scan_screenshot_ai(self):
         """
@@ -216,6 +461,7 @@ class SmartInwestorApp(ctk.CTk):
             logging.error(f"An unexpected error occurred during AI analysis: {e}")
         finally:
             self.after(0, self._restore_buttons)
+            self.after(0, self.load_dashboard_data)
 
     def _restore_buttons(self):
         """
