@@ -106,15 +106,19 @@ class SmartInwestorApp(ctk.CTk):
         self.dashboard_header_frame.grid(row=0, column=0, sticky="ew", pady=(5, 5), padx=5)
         self.dashboard_header_frame.grid_columnconfigure(0, weight=1)
 
-        self.dashboard_label = ctk.CTkLabel(
-            self.dashboard_header_frame, text="Pozycje Otwarte - Dashboard", font=ctk.CTkFont(size=16, weight="bold")
-        )
-        self.dashboard_label.grid(row=0, column=0, sticky="w")
+        self.tab_view = ctk.CTkTabview(self.dashboard_header_frame, command=self.load_dashboard_data, height=40)
+        self.tab_view.grid(row=0, column=0, sticky="ew")
+
+        self.tab_names = ["Info", "Strategia", "Salda", "Pozycje otwarte", "Trejdy", "Refleksje"]
+        for tab_name in self.tab_names:
+            self.tab_view.add(tab_name)
+
+        self.tab_view.set("Pozycje otwarte")
 
         self.refresh_button = ctk.CTkButton(
             self.dashboard_header_frame, text="Odśwież widok", command=self.load_dashboard_data, width=100
         )
-        self.refresh_button.grid(row=0, column=1, sticky="e")
+        self.refresh_button.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
         self.setup_treeview()
 
@@ -173,15 +177,17 @@ class SmartInwestorApp(ctk.CTk):
 
     def load_dashboard_data(self):
         """
-        Loads data from the Excel file and updates the Treeview.
+        Loads data from the Excel file based on the selected tab and updates the Treeview.
         """
         try:
-            df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"])
+            selected_tab = self.tab_view.get()
+            df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"], sheet_name=selected_tab)
 
             # Clear existing data
             self.tree.delete(*self.tree.get_children())
 
             if df.empty:
+                self.tree["columns"] = []
                 return
 
             # Setup columns based on dataframe

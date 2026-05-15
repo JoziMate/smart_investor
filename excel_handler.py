@@ -193,18 +193,34 @@ class ExcelHandler:
             return False
 
     @staticmethod
-    def get_dashboard_data(filename: str) -> pd.DataFrame:
+    def get_dashboard_data(filename: str, sheet_name: str = "Pozycje otwarte") -> pd.DataFrame:
         """
-        Reads the 'Pozycje otwarte' sheet and returns a clean pandas DataFrame for the dashboard.
-        Skips completely empty rows.
+        Reads the specified sheet and returns a clean pandas DataFrame for the dashboard.
+        Skips completely empty rows and columns. Handles header rows based on sheet type.
         """
         try:
-            df = pd.read_excel(filename, sheet_name=config.get("EXCEL_SHEET_NAME_OPEN_POS", "Pozycje otwarte"))
-            # Drop completely empty rows
+            skiprows = None
+            header = 0
+
+            if sheet_name in ["Pozycje otwarte", "Trejdy", "Strategia", "Refleksje"]:
+                skiprows = 3
+            elif sheet_name == "Salda":
+                skiprows = 6
+            elif sheet_name == "Info":
+                header = None
+
+            df = pd.read_excel(filename, sheet_name=sheet_name, skiprows=skiprows, header=header)
+
+            # Drop completely empty rows and columns
             df.dropna(how='all', inplace=True)
+            df.dropna(axis=1, how='all', inplace=True)
+
+            # Replace NaNs with empty strings
+            df.fillna("", inplace=True)
+
             return df
         except Exception as e:
-            logger_inst.error(f"Error reading dashboard data: {e}")
+            logger_inst.error(f"Error reading dashboard data for sheet '{sheet_name}': {e}")
             return pd.DataFrame()
 
     @staticmethod
