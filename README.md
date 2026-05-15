@@ -28,3 +28,10 @@ System został napisany w języku Python z naciskiem na modularność i rygoryst
    ```bash
    git clone <link-do-repozytorium>
    cd smart_investor
+   ```
+
+2. **Wygeneruj szablon danych (Data Template):**
+   ```bash
+   python create_template.py
+   ```
+   *Ten krok tworzy pusty plik `Dziennik_inwestora_template.xlsx` z odpowiednimi nagłówkami.*

@@ -26,7 +26,7 @@ def test_extract_trades_from_image_success(mocker, tmp_path):
     mock_response.text = json.dumps(dummy_trades)
     mock_client.models.generate_content.return_value = mock_response
 
-    mocker.patch('google.genai.Client', return_value=mock_client)
+    mocker.patch('vision_parser.get_client', return_value=mock_client)
 
     # Create a dummy image file
     image_file = tmp_path / "dummy.png"
@@ -50,7 +50,7 @@ def test_extract_trades_from_image_invalid_json(mocker, tmp_path):
     mock_response.text = "This is not json"
     mock_client.models.generate_content.return_value = mock_response
 
-    mocker.patch('google.genai.Client', return_value=mock_client)
+    mocker.patch('vision_parser.get_client', return_value=mock_client)
 
     image_file = tmp_path / "dummy.png"
     import PIL.Image
