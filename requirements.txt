@@ -7,3 +7,4 @@ python-dotenv
 customtkinter
 pytest
 pytest-mock
+pandas
