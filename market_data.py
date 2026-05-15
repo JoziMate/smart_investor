@@ -1,6 +1,9 @@
-import yfinance as yf
-import ccxt
+import concurrent.futures
 import logging
+
+import ccxt
+import yfinance as yf
+
 import logger
 
 logger_inst = logging.getLogger(__name__)
@@ -72,3 +75,34 @@ class MarketDataManager:
             logger_inst.error(
                 f"Unexpected error fetching crypto price for {symbol}: {e}")
             return None
+
+    def get_all_prices(self, assets: list[str]) -> dict[str, float | None]:
+        """
+        Fetches current market prices for a list of assets in parallel.
+
+        Args:
+            assets (list[str]): A list of asset tickers/symbols.
+
+        Returns:
+            dict[str, float | None]: A dictionary mapping each asset to its fetched price.
+        """
+        results = {}
+
+        def fetch_price(asset: str) -> tuple[str, float | None]:
+            if "/" in asset:
+                return asset, self.get_crypto_price(asset)
+            else:
+                return asset, self.get_stock_price(asset)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_asset = {executor.submit(fetch_price, asset): asset for asset in assets}
+            for future in concurrent.futures.as_completed(future_to_asset):
+                asset = future_to_asset[future]
+                try:
+                    asset, price = future.result()
+                    results[asset] = price
+                except Exception as e:
+                    logger_inst.error(f"Error executing fetch for {asset}: {e}")
+                    results[asset] = None
+
+        return results

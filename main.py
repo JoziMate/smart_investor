@@ -1,10 +1,13 @@
-import logging
 import argparse
-from market_data import MarketDataManager
-from excel_handler import ExcelHandler
-from vision_parser import extract_trades_from_image
+import logging
+import sys
+
 from config_manager import config
+from excel_handler import ExcelHandler
 import logger  # Configures the root logger
+from market_data import MarketDataManager
+from vision_parser import extract_trades_from_image
+
 
 def main():
     """
@@ -17,7 +20,6 @@ def main():
     parser.add_argument("--update", action="store_true", help="Run standard market update in the terminal.")
 
     # If no arguments were passed, launch the GUI
-    import sys
     if len(sys.argv) == 1:
         from app_gui import SmartInwestorApp
         app = SmartInwestorApp()
@@ -67,10 +69,13 @@ def main():
         logging.info("Running in Standard Market Update Mode.")
         market_data = MarketDataManager()
 
-        # 2. Process Stocks (yfinance)
-        stocks_to_fetch = ['MSFT', 'GOOGL', 'TSLA']
-        for ticker in stocks_to_fetch:
-            price = market_data.get_stock_price(ticker)
+        # 2. Process All Assets dynamically
+        assets_to_fetch = list(config.get("ASSET_MAPPING", {}).keys())
+
+        # We assume get_all_prices is implemented in market_data.py to return a dict mapping ticker -> price
+        prices = market_data.get_all_prices(assets_to_fetch)
+
+        for ticker, price in prices.items():
             if price is not None:
                 # Update Excel
                 excel.update_asset(ticker, price)
@@ -78,18 +83,7 @@ def main():
                 logging.error(
                     f"Failed to fetch price for {ticker}, skipping update.")
 
-        # 3. Process Crypto (ccxt)
-        crypto_symbol = 'BTC/USDT'
-        btc_price = market_data.get_crypto_price(crypto_symbol)
-
-        if btc_price is not None:
-            # Update Excel
-            excel.update_asset(crypto_symbol, btc_price)
-        else:
-            logging.error(
-                f"Failed to fetch price for {crypto_symbol}, skipping update.")
-
-        # 4. Save the workbook
+        # 3. Save the workbook
         if excel.save_workbook():
             logging.info("--- Update completed successfully ---")
         else:

@@ -12,6 +12,16 @@ load_dotenv()
 
 logger_inst = logging.getLogger(__name__)
 
+# The new SDK automatically picks up GEMINI_API_KEY from environment,
+# or you can pass it explicitly. We rely on the env var after load_dotenv().
+client = None
+
+def get_client() -> genai.Client:
+    global client
+    if client is None:
+        client = genai.Client()
+    return client
+
 def extract_trades_from_image(image_path: str) -> list[dict]:
     """
     Extracts trade data from a screenshot of a brokerage platform using Gemini Vision API.
@@ -28,11 +38,9 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
         logger_inst.error("GEMINI_API_KEY is not set in the environment or .env file.")
         return []
 
-    # The new SDK automatically picks up GEMINI_API_KEY from environment,
-    # or you can pass it explicitly. We rely on the env var after load_dotenv().
-    client = genai.Client()
-
     try:
+        gemini_client = get_client()
+
         # Load the image locally
         logger_inst.info(f"Loading image locally: {image_path}")
         try:
@@ -56,7 +64,7 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
         )
 
         logger_inst.info("Sending request to Gemini API...")
-        response = client.models.generate_content(
+        response = gemini_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[image, prompt]
         )
