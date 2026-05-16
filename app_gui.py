@@ -9,6 +9,7 @@ from tkinter import filedialog, ttk
 from market_data import MarketDataManager
 from excel_handler import ExcelHandler
 from vision_parser import extract_trades_from_image
+from ai_analyzer import generate_market_reflections
 from config_manager import config, save_config
 import logger  # Initializes the root logger with File and Stream handlers
 import dotenv
@@ -96,6 +97,24 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.export_button.grid(row=0, column=2, padx=10)
 
+        self.secondary_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.secondary_buttons_frame.grid(row=2, column=0, pady=(0, 10))
+
+        self.saldo_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Aktualizuj Saldo", command=self.update_saldo
+        )
+        self.saldo_button.grid(row=0, column=0, padx=10)
+
+        self.strategy_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Dodaj Strategię", command=self.open_strategy_modal
+        )
+        self.strategy_button.grid(row=0, column=1, padx=10)
+
+        self.reflection_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Generuj Refleksje (AI)", command=self.generate_reflections
+        )
+        self.reflection_button.grid(row=0, column=2, padx=10)
+
         # 3. Dashboard Frame (Treeview)
         self.dashboard_frame = ctk.CTkFrame(self)
         self.dashboard_frame.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="nsew")
@@ -107,6 +126,7 @@ class SmartInwestorApp(ctk.CTk):
         self.dashboard_header_frame.grid_columnconfigure(0, weight=1)
 
         self.tab_view = ctk.CTkTabview(self.dashboard_header_frame, command=self.load_dashboard_data, height=40)
+        self.tab_view._segmented_button.configure(font=ctk.CTkFont(size=16, weight="bold"))
         self.tab_view.grid(row=0, column=0, sticky="ew")
 
         self.tab_names = ["Info", "Strategia", "Salda", "Pozycje otwarte", "Trejdy", "Refleksje"]
@@ -123,7 +143,7 @@ class SmartInwestorApp(ctk.CTk):
         self.setup_treeview()
 
         # 4. Console Log (Textbox)
-        self.log_textbox = ctk.CTkTextbox(self, state="disabled", height=150)
+        self.log_textbox = ctk.CTkTextbox(self, state="disabled", height=150, font=ctk.CTkFont(size=13))
         self.log_textbox.grid(row=5, column=0, padx=20, pady=(0, 20), sticky="nsew")
 
         # Initial load of dashboard
@@ -138,7 +158,7 @@ class SmartInwestorApp(ctk.CTk):
 
     def setup_treeview(self):
         """
-        Sets up the ttk.Treeview with a dark theme.
+        Sets up the ttk.Treeview with a dark theme and custom typography.
         """
         style = ttk.Style()
         style.theme_use("default")
@@ -152,7 +172,8 @@ class SmartInwestorApp(ctk.CTk):
                         background=bg_color,
                         foreground=fg_color,
                         fieldbackground=bg_color,
-                        rowheight=25,
+                        font=('Arial', 13),
+                        rowheight=30,
                         borderwidth=0)
 
         style.map("Treeview",
@@ -161,19 +182,190 @@ class SmartInwestorApp(ctk.CTk):
         style.configure("Treeview.Heading",
                         background="#3b3b3b",
                         foreground=fg_color,
-                        font=('Arial', 10, 'bold'),
+                        font=('Arial', 14, 'bold'),
                         borderwidth=1)
 
         style.map("Treeview.Heading",
                   background=[('active', "#4b4b4b")])
 
-        # Treeview Scrollbar
-        self.tree_scroll = ttk.Scrollbar(self.dashboard_frame)
-        self.tree_scroll.grid(row=1, column=1, sticky="ns")
+        # Treeview Scrollbars
+        self.tree_scroll_y = ttk.Scrollbar(self.dashboard_frame, orient="vertical")
+        self.tree_scroll_y.grid(row=1, column=1, sticky="ns")
 
-        self.tree = ttk.Treeview(self.dashboard_frame, yscrollcommand=self.tree_scroll.set, selectmode="browse")
+        self.tree_scroll_x = ttk.Scrollbar(self.dashboard_frame, orient="horizontal")
+        self.tree_scroll_x.grid(row=2, column=0, sticky="ew")
+
+        self.tree = ttk.Treeview(
+            self.dashboard_frame,
+            yscrollcommand=self.tree_scroll_y.set,
+            xscrollcommand=self.tree_scroll_x.set,
+            selectmode="browse"
+        )
         self.tree.grid(row=1, column=0, sticky="nsew")
-        self.tree_scroll.config(command=self.tree.yview)
+
+        self.tree_scroll_y.config(command=self.tree.yview)
+        self.tree_scroll_x.config(command=self.tree.xview)
+
+    def update_saldo(self):
+        """
+        Triggers the saldo update in a background thread.
+        """
+        self.saldo_button.configure(state="disabled")
+        logging.info("--- Starting Saldo Update ---")
+
+        def _run_update_saldo():
+            try:
+                # Read open positions df
+                df_open_pos = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"], "Pozycje otwarte")
+                if df_open_pos.empty:
+                    logging.warning("No data found in 'Pozycje otwarte'.")
+                    return
+
+                excel = ExcelHandler(config["EXCEL_FILENAME"], "Salda")
+                if not excel.load_workbook():
+                    logging.error("Could not load the Excel workbook to update Salda.")
+                    return
+
+                if excel.update_saldo(df_open_pos):
+                    if excel.save_workbook():
+                        logging.info("--- Saldo Update completed successfully ---")
+                    else:
+                        logging.error("--- Saldo Update failed during save ---")
+                else:
+                    logging.error("--- Saldo Update failed ---")
+            except Exception as e:
+                logging.error(f"Unexpected error during Saldo Update: {e}")
+            finally:
+                self.after(0, lambda: self.saldo_button.configure(state="normal"))
+                self.after(0, self.load_dashboard_data)
+
+        thread = threading.Thread(target=_run_update_saldo, daemon=True)
+        thread.start()
+
+    def open_strategy_modal(self):
+        """
+        Opens a modal window to add a new strategy.
+        """
+        if hasattr(self, "strategy_window") and self.strategy_window is not None and self.strategy_window.winfo_exists():
+            self.strategy_window.focus()
+            return
+
+        self.strategy_window = ctk.CTkToplevel(self)
+        self.strategy_window.title("Dodaj Strategię")
+        self.strategy_window.geometry("500x600")
+
+        # Bring to front
+        self.strategy_window.attributes("-topmost", True)
+        self.after(100, lambda: self.strategy_window.attributes("-topmost", False))
+
+        frame = ctk.CTkFrame(self.strategy_window)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Wersja
+        ctk.CTkLabel(frame, text="Wersja:").grid(row=0, column=0, sticky="w", pady=(10, 5))
+        self.strat_wersja = ctk.CTkEntry(frame, width=300)
+        self.strat_wersja.grid(row=0, column=1, pady=(10, 5), padx=(10, 0))
+
+        # Klasa aktywów
+        ctk.CTkLabel(frame, text="Klasa aktywów:").grid(row=1, column=0, sticky="w", pady=5)
+        self.strat_klasa = ctk.CTkEntry(frame, width=300)
+        self.strat_klasa.grid(row=1, column=1, pady=5, padx=(10, 0))
+
+        # Horyzont
+        ctk.CTkLabel(frame, text="Horyzont:").grid(row=2, column=0, sticky="w", pady=5)
+        self.strat_horyzont = ctk.CTkEntry(frame, width=300)
+        self.strat_horyzont.grid(row=2, column=1, pady=5, padx=(10, 0))
+
+        # Kryteria wejścia/wyjścia
+        ctk.CTkLabel(frame, text="Kryteria wejścia/wyjścia:").grid(row=3, column=0, sticky="nw", pady=5)
+        self.strat_kryteria = ctk.CTkTextbox(frame, width=300, height=100)
+        self.strat_kryteria.grid(row=3, column=1, pady=5, padx=(10, 0))
+
+        # Zarządzanie ryzykiem
+        ctk.CTkLabel(frame, text="Zarządzanie ryzykiem:").grid(row=4, column=0, sticky="nw", pady=5)
+        self.strat_ryzyko = ctk.CTkTextbox(frame, width=300, height=100)
+        self.strat_ryzyko.grid(row=4, column=1, pady=5, padx=(10, 0))
+
+        # Save Button
+        save_btn = ctk.CTkButton(frame, text="Zapisz", command=self.save_strategy)
+        save_btn.grid(row=5, column=0, columnspan=2, pady=20)
+
+    def save_strategy(self):
+        """
+        Saves the new strategy to the Excel file.
+        """
+        strategy_data = {
+            "Wersja": self.strat_wersja.get().strip(),
+            "Klasa aktywów": self.strat_klasa.get().strip(),
+            "Horyzont": self.strat_horyzont.get().strip(),
+            "Kryteria wejścia/wyjścia": self.strat_kryteria.get("1.0", "end-1c").strip(),
+            "Zarządzanie ryzykiem": self.strat_ryzyko.get("1.0", "end-1c").strip()
+        }
+
+        self.strategy_window.destroy()
+
+        def _run_save_strategy():
+            try:
+                excel = ExcelHandler(config["EXCEL_FILENAME"], "Strategia")
+                if not excel.load_workbook():
+                    logging.error("Could not load the Excel workbook to save Strategy.")
+                    return
+
+                if excel.append_strategy(strategy_data):
+                    if excel.save_workbook():
+                        logging.info("--- Strategy Saved successfully ---")
+                    else:
+                        logging.error("--- Strategy Save failed during save ---")
+                else:
+                    logging.error("--- Strategy Save failed ---")
+            except Exception as e:
+                logging.error(f"Unexpected error saving strategy: {e}")
+            finally:
+                self.after(0, self.load_dashboard_data)
+
+        thread = threading.Thread(target=_run_save_strategy, daemon=True)
+        thread.start()
+
+    def generate_reflections(self):
+        """
+        Triggers the AI reflections generation in a background thread.
+        """
+        self.reflection_button.configure(state="disabled")
+        logging.info("--- Starting AI Reflections Generation ---")
+
+        def _run_generate_reflections():
+            try:
+                performance_data = ExcelHandler.get_open_positions_performance(config["EXCEL_FILENAME"])
+                if not performance_data:
+                    logging.warning("No performance data found for reflections.")
+                    return
+
+                reflection_json = generate_market_reflections(performance_data)
+
+                if reflection_json:
+                    excel = ExcelHandler(config["EXCEL_FILENAME"], "Refleksje")
+                    if not excel.load_workbook():
+                        logging.error("Could not load the Excel workbook to save Reflections.")
+                        return
+
+                    if excel.append_reflection(reflection_json):
+                        if excel.save_workbook():
+                            logging.info("--- AI Reflections Generated and Saved successfully ---")
+                        else:
+                            logging.error("--- AI Reflections Save failed during save ---")
+                    else:
+                        logging.error("--- AI Reflections Save failed ---")
+                else:
+                    logging.error("--- AI Reflections Generation returned empty ---")
+
+            except Exception as e:
+                logging.error(f"Unexpected error generating reflections: {e}")
+            finally:
+                self.after(0, lambda: self.reflection_button.configure(state="normal"))
+                self.after(0, self.load_dashboard_data)
+
+        thread = threading.Thread(target=_run_generate_reflections, daemon=True)
+        thread.start()
 
     def load_dashboard_data(self):
         """
