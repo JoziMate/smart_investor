@@ -168,6 +168,169 @@ class ExcelHandler:
             logger_inst.error(f"Failed to append new position: {e}")
             return False
 
+    def update_saldo(self, df_open_pos: pd.DataFrame) -> bool:
+        """
+        Calculates balances from 'Pozycje otwarte' and appends them to 'Salda'.
+
+        Args:
+            df_open_pos (pd.DataFrame): DataFrame of the 'Pozycje otwarte' sheet.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if self.sheet is None:
+            logger_inst.error("Cannot update saldo: Workbook or sheet is not loaded.")
+            return False
+
+        try:
+            # Initialize balances
+            balances = {
+                "GPW Trader": 0.0,
+                "Saxo": 0.0,
+                "Binance Futures": 0.0,
+                "Interactive Brokers": 0.0
+            }
+
+            # Calculate balances
+            for _, row in df_open_pos.iterrows():
+                try:
+                    platform = str(row.get('Platforma', '')).strip()
+                    volume_str = str(row.get('Wolumen', '0')).replace(',', '.')
+                    price_str = str(row.get('Cena bieżąca', '0')).replace(',', '.')
+
+                    if not platform or not volume_str or not price_str:
+                        continue
+
+                    volume = float(volume_str)
+                    price = float(price_str)
+                    value = volume * price
+
+                    # Match platform names
+                    for key in balances.keys():
+                        if key.lower() in platform.lower():
+                            balances[key] += value
+                            break
+                except ValueError:
+                    # Skip rows where volume or price cannot be parsed as floats
+                    continue
+
+            # Find the first empty row in 'Salda' (starting from row 8 based on skipping 6 headers, 1st data row is 8)
+            empty_row = 8
+            while self.sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+
+            # Populate the new row
+            self.sheet.cell(row=empty_row, column=1).value = "Automatyczny Update"
+            self.sheet.cell(row=empty_row, column=2).value = today_str
+            self.sheet.cell(row=empty_row, column=3).value = balances["GPW Trader"]
+            self.sheet.cell(row=empty_row, column=5).value = balances["Saxo"]
+            self.sheet.cell(row=empty_row, column=9).value = balances["Binance Futures"]
+            self.sheet.cell(row=empty_row, column=11).value = balances["Interactive Brokers"]
+
+            logger_inst.info(f"Appended new saldo update at row {empty_row}.")
+            return True
+
+        except Exception as e:
+            logger_inst.error(f"Failed to update saldo: {e}")
+            return False
+
+    def append_strategy(self, strategy_data: dict) -> bool:
+        """
+        Appends a new strategy row to the 'Strategia' sheet.
+        """
+        if self.sheet is None:
+            logger_inst.error("Cannot append strategy: Workbook or sheet is not loaded.")
+            return False
+
+        try:
+            # Find the first empty row below Row 4 (headers on Row 4)
+            empty_row = 5
+            while self.sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+
+            self.sheet.cell(row=empty_row, column=1).value = strategy_data.get('Wersja', '')
+            self.sheet.cell(row=empty_row, column=2).value = today_str
+            self.sheet.cell(row=empty_row, column=3).value = strategy_data.get('Klasa aktywów', '')
+            self.sheet.cell(row=empty_row, column=4).value = strategy_data.get('Horyzont', '')
+            self.sheet.cell(row=empty_row, column=5).value = strategy_data.get('Kryteria wejścia/wyjścia', '')
+            self.sheet.cell(row=empty_row, column=6).value = strategy_data.get('Zarządzanie ryzykiem', '')
+
+            logger_inst.info(f"Appended new strategy at row {empty_row}.")
+            return True
+        except Exception as e:
+            logger_inst.error(f"Failed to append strategy: {e}")
+            return False
+
+    def append_reflection(self, reflection_data: dict) -> bool:
+        """
+        Appends a new reflection row to the 'Refleksje' sheet.
+        """
+        if self.sheet is None:
+            logger_inst.error("Cannot append reflection: Workbook or sheet is not loaded.")
+            return False
+
+        try:
+            # Find the first empty row below Row 4 (headers on Row 4)
+            empty_row = 5
+            while self.sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            self.sheet.cell(row=empty_row, column=1).value = "Automatyczne Podsumowanie"
+            self.sheet.cell(row=empty_row, column=2).value = reflection_data.get('co_zadzialalo', '')
+            self.sheet.cell(row=empty_row, column=3).value = reflection_data.get('co_nie_zadzialalo', '')
+            self.sheet.cell(row=empty_row, column=4).value = reflection_data.get('co_zmieniam', '')
+
+            logger_inst.info(f"Appended new reflection at row {empty_row}.")
+            return True
+        except Exception as e:
+            logger_inst.error(f"Failed to append reflection: {e}")
+            return False
+
+    @staticmethod
+    def get_open_positions_performance(filename: str) -> str:
+        """
+        Extracts performance data from 'Pozycje otwarte' to format as a string for AI.
+        """
+        try:
+            df = ExcelHandler.get_dashboard_data(filename, "Pozycje otwarte")
+            performance = []
+
+            # Look for Instrument (Col C) and Wynik % (Col H in 1-based, might be named different in parsed df)
+            # Find columns dynamically based on names
+            inst_col = None
+            wynik_col = None
+            for col in df.columns:
+                if 'instrument' in str(col).lower() or 'ticker' in str(col).lower() or 'nazwa' in str(col).lower():
+                    inst_col = col
+                if 'wynik' in str(col).lower() and '%' in str(col).lower():
+                    wynik_col = col
+
+            if not inst_col:
+                # Fallback to column index 2 (Column C)
+                inst_col = df.columns[2] if len(df.columns) > 2 else None
+            if not wynik_col:
+                # Fallback to column index 7 (Column H)
+                wynik_col = df.columns[7] if len(df.columns) > 7 else None
+
+            if inst_col is None or wynik_col is None:
+                logger_inst.warning("Could not find Instrument or Wynik % columns for performance data.")
+                return ""
+
+            for _, row in df.iterrows():
+                instrument = row.get(inst_col, '')
+                wynik = row.get(wynik_col, '')
+                if instrument and wynik:
+                    performance.append(f"Instrument: {instrument}, Wynik: {wynik}")
+
+            return "\n".join(performance)
+        except Exception as e:
+            logger_inst.error(f"Failed to extract open positions performance: {e}")
+            return ""
+
     def save_workbook(self) -> bool:
         """
         Saves the workbook to the file.
