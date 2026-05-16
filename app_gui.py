@@ -62,63 +62,73 @@ class SmartInwestorApp(ctk.CTk):
         self.grid_rowconfigure(4, weight=1) # The dashboard area
         self.grid_rowconfigure(5, weight=1) # The log area
 
-        # 1. Header Frame (for title and settings button)
+        # 1. Top Menu Bar
+        self.menu_frame = ctk.CTkFrame(self, height=40, corner_radius=0)
+        self.menu_frame.grid(row=0, column=0, sticky="ew")
+        self.menu_frame.grid_columnconfigure(3, weight=1)
+
+        menu_font = ctk.CTkFont(size=14, weight="bold")
+
+        # Plik Menu
+        self.plik_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Zapisz edycję arkusza", "Eksportuj Raport", "Ustawienia", "Zakończ"],
+            command=self.handle_plik_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.plik_menu.set("Plik")
+        self.plik_menu.grid(row=0, column=0, padx=5, pady=5)
+
+        # Akcje Menu
+        self.akcje_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Update Market Prices", "Upload Trade Screenshot"],
+            command=self.handle_akcje_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.akcje_menu.set("Akcje")
+        self.akcje_menu.grid(row=0, column=1, padx=5, pady=5)
+
+        # Narzędzia Menu
+        self.narzedzia_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Aktualizuj Saldo", "Dodaj Strategię", "Generuj Refleksje (AI)", "Kalkulator Ryzyka"],
+            command=self.handle_narzedzia_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.narzedzia_menu.set("Narzędzia")
+        self.narzedzia_menu.grid(row=0, column=2, padx=5, pady=5)
+
+        # 2. Header Frame (for title)
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, pady=(20, 10), sticky="ew")
+        self.header_frame.grid(row=1, column=0, pady=(20, 10), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         self.header_label = ctk.CTkLabel(
             self.header_frame, text="Gra Inwestycyjna - Portfolio Manager", font=ctk.CTkFont(size=24, weight="bold")
         )
         self.header_label.grid(row=0, column=0)
-
-        # Settings Button
-        self.settings_button = ctk.CTkButton(
-            self.header_frame, text="⚙️ Ustawienia", command=self.open_settings_window, width=120
-        )
-        self.settings_button.grid(row=0, column=1, padx=20)
-
-        # 2. Buttons Frame
-        self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.buttons_frame.grid(row=1, column=0, pady=(10, 10))
-
-        self.api_button = ctk.CTkButton(
-            self.buttons_frame, text="Update Market Prices", command=self.update_portfolio_api
-        )
-        self.api_button.grid(row=0, column=0, padx=10)
-
-        self.vision_button = ctk.CTkButton(
-            self.buttons_frame, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
-        )
-        self.vision_button.grid(row=0, column=1, padx=10)
-
-        self.export_button = ctk.CTkButton(
-            self.buttons_frame, text="Eksportuj Raport", command=self.export_reports
-        )
-        self.export_button.grid(row=0, column=2, padx=10)
-
-        self.secondary_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.secondary_buttons_frame.grid(row=2, column=0, pady=(0, 10))
-
-        self.saldo_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Aktualizuj Saldo", command=self.update_saldo
-        )
-        self.saldo_button.grid(row=0, column=0, padx=10)
-
-        self.strategy_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Dodaj Strategię", command=self.open_strategy_modal
-        )
-        self.strategy_button.grid(row=0, column=1, padx=10)
-
-        self.reflection_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Generuj Refleksje (AI)", command=self.generate_reflections
-        )
-        self.reflection_button.grid(row=0, column=2, padx=10)
-
-        self.risk_calc_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="🧮 Kalkulator Ryzyka", command=self.open_risk_calculator
-        )
-        self.risk_calc_button.grid(row=0, column=3, padx=10)
 
         # 3. Dashboard Frame (Treeview)
         self.dashboard_frame = ctk.CTkFrame(self)
@@ -161,6 +171,78 @@ class SmartInwestorApp(ctk.CTk):
         # Start polling the queue for log messages
         self.after(100, self.poll_log_queue)
 
+    def handle_plik_menu(self, choice):
+        # Reset the menu text to "Plik"
+        self.plik_menu.set("Plik")
+
+        if choice == "Zapisz edycję arkusza":
+            self.save_sheet_edits()
+        elif choice == "Eksportuj Raport":
+            self.export_reports()
+        elif choice == "Ustawienia":
+            self.open_settings_window()
+        elif choice == "Zakończ":
+            self.destroy()
+
+    def handle_akcje_menu(self, choice):
+        # Reset the menu text to "Akcje"
+        self.akcje_menu.set("Akcje")
+
+        if choice == "Update Market Prices":
+            self.update_portfolio_api()
+        elif choice == "Upload Trade Screenshot":
+            self.scan_screenshot_ai()
+
+    def handle_narzedzia_menu(self, choice):
+        # Reset the menu text to "Narzędzia"
+        self.narzedzia_menu.set("Narzędzia")
+
+        if choice == "Aktualizuj Saldo":
+            self.update_saldo()
+        elif choice == "Dodaj Strategię":
+            self.open_strategy_modal()
+        elif choice == "Generuj Refleksje (AI)":
+            self.generate_reflections()
+        elif choice == "Kalkulator Ryzyka":
+            self.open_risk_calculator()
+
+    def save_sheet_edits(self):
+        self.plik_menu.configure(state="disabled")
+        logging.info("--- Starting Save of Sheet Edits ---")
+
+        # Capture current state of the datagrid
+        current_tab = self.tab_view.get()
+        data_to_save = []
+        for item in self.tree.get_children():
+            # tree.item(item)['values'] returns a list of values
+            # Sometimes values might be read as integers by tkinter if they look like it,
+            # so we ensure they are casted to strings representing empty or filled cells.
+            row_data = ["" if v == "None" or v is None else str(v) for v in self.tree.item(item)['values']]
+            data_to_save.append(row_data)
+
+        def _run_save_edits():
+            try:
+                excel = ExcelHandler(config["EXCEL_FILENAME"], current_tab)
+                if not excel.load_workbook():
+                    logging.error("Could not load the Excel workbook to save edits.")
+                    return
+
+                if excel.save_sheet_edits(data_to_save):
+                    if excel.save_workbook():
+                        logging.info("--- Sheet Edits saved successfully ---")
+                    else:
+                        logging.error("--- Failed to save workbook after edits ---")
+                else:
+                    logging.error("--- Failed to apply edits to sheet ---")
+            except Exception as e:
+                logging.error(f"Unexpected error saving edits: {e}")
+            finally:
+                self.after(0, lambda: self.plik_menu.configure(state="normal"))
+                self.after(0, self.load_dashboard_data)
+
+        thread = threading.Thread(target=_run_save_edits, daemon=True)
+        thread.start()
+
     def setup_treeview(self):
         """
         Sets up the ttk.Treeview with a dark theme and custom typography.
@@ -177,7 +259,7 @@ class SmartInwestorApp(ctk.CTk):
                         background=bg_color,
                         foreground=fg_color,
                         fieldbackground=bg_color,
-                        font=('Arial', 13),
+                        font=('Arial', 14),
                         rowheight=30,
                         borderwidth=0)
 
@@ -187,7 +269,7 @@ class SmartInwestorApp(ctk.CTk):
         style.configure("Treeview.Heading",
                         background="#3b3b3b",
                         foreground=fg_color,
-                        font=('Arial', 14, 'bold'),
+                        font=('Arial', 15, 'bold'),
                         borderwidth=1)
 
         style.map("Treeview.Heading",
@@ -210,6 +292,50 @@ class SmartInwestorApp(ctk.CTk):
 
         self.tree_scroll_y.config(command=self.tree.yview)
         self.tree_scroll_x.config(command=self.tree.xview)
+
+        # Bind double-click for in-place editing
+        self.tree.bind("<Double-1>", self.on_double_click)
+
+    def on_double_click(self, event):
+        """
+        Handles double-click events to spawn an entry widget over the cell.
+        """
+        region = self.tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+
+        column = self.tree.identify_column(event.x)
+        item = self.tree.identify_row(event.y)
+        if not column or not item:
+            return
+
+        col_index = int(column[1:]) - 1
+        x, y, width, height = self.tree.bbox(item, column)
+
+        # Get current value
+        current_value = self.tree.set(item, column)
+
+        # Create entry widget
+        entry = ctk.CTkEntry(self.tree, font=ctk.CTkFont(size=14))
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, current_value)
+        entry.select_range(0, 'end')
+        entry.focus()
+
+        def save_edit(event=None):
+            if entry.winfo_exists():
+                new_value = entry.get()
+                self.tree.set(item, column, new_value)
+                entry.destroy()
+                logging.info(f"Cell edited at row {item}, col {column}: '{current_value}' -> '{new_value}'")
+
+        def cancel_edit(event=None):
+            if entry.winfo_exists():
+                entry.destroy()
+
+        entry.bind("<Return>", save_edit)
+        entry.bind("<FocusOut>", save_edit)
+        entry.bind("<Escape>", cancel_edit)
 
     def update_saldo(self):
         """
