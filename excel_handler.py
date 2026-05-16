@@ -209,7 +209,7 @@ class ExcelHandler:
             elif sheet_name == "Info":
                 header = None
 
-            df = pd.read_excel(filename, sheet_name=sheet_name, skiprows=skiprows, header=header)
+            df = pd.read_excel(filename, sheet_name=sheet_name, skiprows=skiprows, header=header, dtype=str)
 
             # Drop completely empty rows and columns
             df.dropna(how='all', inplace=True)
