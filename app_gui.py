@@ -115,6 +115,11 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.reflection_button.grid(row=0, column=2, padx=10)
 
+        self.risk_calc_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="🧮 Kalkulator Ryzyka", command=self.open_risk_calculator
+        )
+        self.risk_calc_button.grid(row=0, column=3, padx=10)
+
         # 3. Dashboard Frame (Treeview)
         self.dashboard_frame = ctk.CTkFrame(self)
         self.dashboard_frame.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="nsew")
@@ -417,6 +422,111 @@ class SmartInwestorApp(ctk.CTk):
 
         thread = threading.Thread(target=_run_export, daemon=True)
         thread.start()
+
+    def open_risk_calculator(self):
+        """
+        Opens a Toplevel window for the Institutional Risk Management Calculator.
+        """
+        if hasattr(self, "risk_calc_window") and self.risk_calc_window is not None and self.risk_calc_window.winfo_exists():
+            self.risk_calc_window.focus()
+            return
+
+        self.risk_calc_window = ctk.CTkToplevel(self)
+        self.risk_calc_window.title("Kalkulator Ryzyka")
+        self.risk_calc_window.geometry("450x550")
+
+        # Bring to front
+        self.risk_calc_window.attributes("-topmost", True)
+        self.after(100, lambda: self.risk_calc_window.attributes("-topmost", False))
+
+        # Main frame
+        frame = ctk.CTkFrame(self.risk_calc_window)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Inputs
+        ctk.CTkLabel(frame, text="Instrument (Ticker):", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", pady=(10, 5), padx=5)
+        ticker_entry = ctk.CTkEntry(frame, width=200)
+        ticker_entry.grid(row=0, column=1, pady=(10, 5), padx=5)
+
+        ctk.CTkLabel(frame, text="Wielkość kapitału:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
+        capital_entry = ctk.CTkEntry(frame, width=200)
+        capital_entry.insert(0, "100000")
+        capital_entry.grid(row=1, column=1, pady=5, padx=5)
+
+        ctk.CTkLabel(frame, text="Maksymalne ryzyko %:").grid(row=2, column=0, sticky="w", pady=5, padx=5)
+        risk_entry = ctk.CTkEntry(frame, width=200)
+        risk_entry.insert(0, "2.0")
+        risk_entry.grid(row=2, column=1, pady=5, padx=5)
+
+        ctk.CTkLabel(frame, text="Cena wejścia:").grid(row=3, column=0, sticky="w", pady=5, padx=5)
+        entry_price_entry = ctk.CTkEntry(frame, width=200)
+        entry_price_entry.grid(row=3, column=1, pady=5, padx=5)
+
+        ctk.CTkLabel(frame, text="Poziom Stop-Loss:").grid(row=4, column=0, sticky="w", pady=5, padx=5)
+        sl_price_entry = ctk.CTkEntry(frame, width=200)
+        sl_price_entry.grid(row=4, column=1, pady=5, padx=5)
+
+        # Calculate Button
+        calc_btn = ctk.CTkButton(frame, text="Oblicz Wolumen", command=lambda: self.calculate_risk(
+            ticker_entry.get(),
+            capital_entry.get(),
+            risk_entry.get(),
+            entry_price_entry.get(),
+            sl_price_entry.get()
+        ))
+        calc_btn.grid(row=5, column=0, columnspan=2, pady=20)
+
+        # Output Section
+        output_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        output_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=10)
+
+        self.calc_error_label = ctk.CTkLabel(output_frame, text="", text_color="red", font=ctk.CTkFont(weight="bold"))
+        self.calc_error_label.pack(pady=5)
+
+        self.calc_vol_label = ctk.CTkLabel(output_frame, text="Maksymalny Wolumen: --", font=ctk.CTkFont(size=14))
+        self.calc_vol_label.pack(anchor="w", pady=2)
+
+        self.calc_pos_val_label = ctk.CTkLabel(output_frame, text="Wartość Pozycji: --", font=ctk.CTkFont(size=14))
+        self.calc_pos_val_label.pack(anchor="w", pady=2)
+
+        self.calc_risk_amt_label = ctk.CTkLabel(output_frame, text="Kwota zaryzykowana: --", font=ctk.CTkFont(size=14))
+        self.calc_risk_amt_label.pack(anchor="w", pady=2)
+
+    def calculate_risk(self, ticker, capital_str, risk_str, entry_price_str, sl_price_str):
+        # Reset error and outputs
+        self.calc_error_label.configure(text="")
+        self.calc_vol_label.configure(text="Maksymalny Wolumen: --")
+        self.calc_pos_val_label.configure(text="Wartość Pozycji: --")
+        self.calc_risk_amt_label.configure(text="Kwota zaryzykowana: --")
+
+        try:
+            capital = float(capital_str.replace(',', '.'))
+            risk_pct = float(risk_str.replace(',', '.'))
+            entry_price = float(entry_price_str.replace(',', '.'))
+            sl_price = float(sl_price_str.replace(',', '.'))
+        except ValueError:
+            self.calc_error_label.configure(text="Błąd: Wprowadź poprawne wartości liczbowe.")
+            return
+
+        if entry_price == sl_price:
+            self.calc_error_label.configure(text="Błąd: Cena wejścia i Stop-Loss nie mogą być równe!")
+            return
+
+        risk_amount = capital * (risk_pct / 100.0)
+        risk_per_unit = abs(entry_price - sl_price)
+        optimal_volume = risk_amount / risk_per_unit
+        total_position_value = optimal_volume * entry_price
+
+        # Format based on ticker
+        if '/' in ticker:
+            optimal_volume_formatted = f"{optimal_volume:.2f}"
+        else:
+            optimal_volume_formatted = f"{int(round(optimal_volume))}"
+
+        self.calc_vol_label.configure(text=f"Maksymalny Wolumen: {optimal_volume_formatted}")
+        self.calc_pos_val_label.configure(text=f"Wartość Pozycji: {total_position_value:.2f}")
+        self.calc_risk_amt_label.configure(text=f"Kwota zaryzykowana: {risk_amount:.2f}")
+
 
     def open_settings_window(self):
         """
