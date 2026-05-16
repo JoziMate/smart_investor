@@ -13,6 +13,7 @@ from ai_analyzer import generate_market_reflections
 from config_manager import config, save_config
 import logger  # Initializes the root logger with File and Stream handlers
 import dotenv
+from nbp_api import fetch_usd_pln_rate
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -72,11 +73,17 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.header_label.grid(row=0, column=0)
 
+        # Rate Label
+        self.rate_label = ctk.CTkLabel(
+            self.header_frame, text="Kurs USD/PLN (NBP): Trwa pobieranie...", font=ctk.CTkFont(size=14)
+        )
+        self.rate_label.grid(row=0, column=1, padx=(10, 20), sticky="e")
+
         # Settings Button
         self.settings_button = ctk.CTkButton(
             self.header_frame, text="⚙️ Ustawienia", command=self.open_settings_window, width=120
         )
-        self.settings_button.grid(row=0, column=1, padx=20)
+        self.settings_button.grid(row=0, column=2, padx=20)
 
         # 2. Buttons Frame
         self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -161,6 +168,19 @@ class SmartInwestorApp(ctk.CTk):
         # Start polling the queue for log messages
         self.after(100, self.poll_log_queue)
 
+        # Fetch NBP Rate
+        self.usd_pln_rate = 4.00 # Default
+        self.fetch_rate_bg()
+
+    def fetch_rate_bg(self):
+        """Fetches the NBP rate in the background to avoid freezing the GUI."""
+        def _fetch():
+            rate = fetch_usd_pln_rate()
+            self.usd_pln_rate = rate
+            self.after(0, lambda: self.rate_label.configure(text=f"Kurs USD/PLN (NBP): {rate:.2f}"))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def setup_treeview(self):
         """
         Sets up the ttk.Treeview with a dark theme and custom typography.
@@ -231,7 +251,7 @@ class SmartInwestorApp(ctk.CTk):
                     logging.error("Could not load the Excel workbook to update Salda.")
                     return
 
-                if excel.update_saldo(df_open_pos):
+                if excel.update_saldo(df_open_pos, getattr(self, 'usd_pln_rate', 1.0)):
                     if excel.save_workbook():
                         logging.info("--- Saldo Update completed successfully ---")
                     else:

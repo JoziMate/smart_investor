@@ -6,6 +6,7 @@ from google.genai import errors
 from PIL import Image
 from dotenv import load_dotenv
 import logger
+from config_manager import config
 
 # Load environment variables
 load_dotenv()
@@ -87,7 +88,33 @@ def extract_trades_from_image(image_path: str) -> list[dict]:
             if not isinstance(trades, list):
                 logger_inst.error(f"Expected a JSON array, got: {type(trades)}")
                 return []
-            return trades
+
+            valid_trades = []
+            asset_mapping = config.get("ASSET_MAPPING", {})
+            for trade in trades:
+                try:
+                    price = float(trade.get("Price", 0))
+                    volume = float(trade.get("Volume", 0))
+                    direction = trade.get("Direction")
+                    ticker = trade.get("Ticker")
+
+                    if price <= 0 or volume <= 0:
+                        logger_inst.error(f"Invalid trade (Price/Volume <= 0): {trade}")
+                        continue
+                    if direction not in ["Long", "Short"]:
+                        logger_inst.error(f"Invalid trade (Direction not Long/Short): {trade}")
+                        continue
+                    if ticker not in asset_mapping:
+                        logger_inst.error(f"Invalid trade (Ticker '{ticker}' not found in ASSET_MAPPING): {trade}")
+                        continue
+
+                    valid_trades.append(trade)
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger_inst.error(f"Invalid trade (Malformed Price/Volume data, error: {e}): {trade}")
+                    continue
+
+            return valid_trades
+
         except json.JSONDecodeError as e:
             logger_inst.error(f"Failed to parse JSON response: {e}")
             logger_inst.debug(f"Raw response was: {response_text}")
