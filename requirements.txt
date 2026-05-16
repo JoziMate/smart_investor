@@ -8,3 +8,4 @@ customtkinter
 pytest
 pytest-mock
 pandas
+requests
