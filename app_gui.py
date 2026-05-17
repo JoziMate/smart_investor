@@ -4,6 +4,7 @@ import queue
 import logging
 import threading
 import pandas as pd
+from tkinterdnd2 import TkinterDnD, DND_FILES
 import customtkinter as ctk
 from tkinter import filedialog, ttk
 from market_data import MarketDataManager
@@ -54,12 +55,21 @@ class StdoutRedirector:
         pass
 
 
-class SmartInwestorApp(ctk.CTk):
+class TkinterDnDCTk(ctk.CTk, TkinterDnD.DnDWrapper):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.TkdndVersion = TkinterDnD._require(self)
+
+class SmartInwestorApp(TkinterDnDCTk):
     def __init__(self):
         super().__init__()
 
         self.title("Gra Inwestycyjna - Portfolio Manager")
         self.geometry("900x700")
+
+        # Setup Drag and Drop
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind('<<Drop>>', self.handle_file_drop)
 
         # Layout configuration
         self.grid_columnconfigure(0, weight=1)
@@ -153,47 +163,7 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.settings_button.grid(row=0, column=3, padx=20)
 
-        # 2. Buttons Frame
-        self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.buttons_frame.grid(row=1, column=0, pady=(10, 10))
 
-        self.api_button = ctk.CTkButton(
-            self.buttons_frame, text="Update Market Prices", command=self.update_portfolio_api
-        )
-        self.api_button.grid(row=0, column=0, padx=10)
-
-        self.vision_button = ctk.CTkButton(
-            self.buttons_frame, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
-        )
-        self.vision_button.grid(row=0, column=1, padx=10)
-
-        self.export_button = ctk.CTkButton(
-            self.buttons_frame, text="Eksportuj Raport", command=self.export_reports
-        )
-        self.export_button.grid(row=0, column=2, padx=10)
-
-        self.secondary_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.secondary_buttons_frame.grid(row=2, column=0, pady=(0, 10))
-
-        self.saldo_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Aktualizuj Saldo", command=self.update_saldo
-        )
-        self.saldo_button.grid(row=0, column=0, padx=10)
-
-        self.strategy_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Dodaj Strategię", command=self.open_strategy_modal
-        )
-        self.strategy_button.grid(row=0, column=1, padx=10)
-
-        self.reflection_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="Generuj Refleksje (AI)", command=self.generate_reflections
-        )
-        self.reflection_button.grid(row=0, column=2, padx=10)
-
-        self.risk_calc_button = ctk.CTkButton(
-            self.secondary_buttons_frame, text="🧮 Kalkulator Ryzyka", command=self.open_risk_calculator
-        )
-        self.risk_calc_button.grid(row=0, column=3, padx=10)
 
         # 3. Dashboard Frame (Treeview)
         self.dashboard_frame = ctk.CTkFrame(self)
@@ -349,9 +319,6 @@ class SmartInwestorApp(ctk.CTk):
 
     def _run_auto_update_sequence(self):
         """Runs the portfolio update and then immediately the saldo update."""
-        self.api_button.configure(state="disabled")
-        self.vision_button.configure(state="disabled")
-        self.saldo_button.configure(state="disabled")
 
         def _sequence():
             # 1. Update Market Prices
@@ -377,7 +344,7 @@ class SmartInwestorApp(ctk.CTk):
                         foreground=fg_color,
                         fieldbackground=bg_color,
                         font=('Arial', 14),
-                        rowheight=30,
+                        rowheight=32,
                         borderwidth=0)
 
         style.map("Treeview",
@@ -432,8 +399,15 @@ class SmartInwestorApp(ctk.CTk):
         # Get current value
         current_value = self.tree.set(item, column)
 
-        # Create entry widget
-        entry = ctk.CTkEntry(self.tree, font=ctk.CTkFont(size=14))
+        # Create entry widget with explicit configuration matching the Treeview
+        # Using a solid font setting inside a new CTkEntry instance to guarantee it renders clearly
+        # and doesn't get squished.
+        entry = ctk.CTkEntry(
+            self.tree,
+            font=ctk.CTkFont(family="Arial", size=14),
+            border_width=1,
+            corner_radius=0
+        )
         entry.place(x=x, y=y, width=width, height=height)
         entry.insert(0, current_value)
         entry.select_range(0, 'end')
@@ -458,7 +432,6 @@ class SmartInwestorApp(ctk.CTk):
         """
         Triggers the saldo update in a background thread.
         """
-        self.saldo_button.configure(state="disabled")
         logging.info("--- Starting Saldo Update ---")
 
         def _run_update_saldo():
@@ -484,7 +457,6 @@ class SmartInwestorApp(ctk.CTk):
             except Exception as e:
                 logging.error(f"Unexpected error during Saldo Update: {e}")
             finally:
-                self.after(0, lambda: self.saldo_button.configure(state="normal"))
                 self.after(0, self.load_dashboard_data)
 
         thread = threading.Thread(target=_run_update_saldo, daemon=True)
@@ -578,7 +550,6 @@ class SmartInwestorApp(ctk.CTk):
         """
         Triggers the AI reflections generation in a background thread.
         """
-        self.reflection_button.configure(state="disabled")
         logging.info("--- Starting AI Reflections Generation ---")
 
         def _run_generate_reflections():
@@ -609,7 +580,6 @@ class SmartInwestorApp(ctk.CTk):
             except Exception as e:
                 logging.error(f"Unexpected error generating reflections: {e}")
             finally:
-                self.after(0, lambda: self.reflection_button.configure(state="normal"))
                 self.after(0, self.load_dashboard_data)
 
         thread = threading.Thread(target=_run_generate_reflections, daemon=True)
@@ -729,7 +699,6 @@ class SmartInwestorApp(ctk.CTk):
         """
         Exports 'Pozycje otwarte' and 'Trejdy' to CSV files.
         """
-        self.export_button.configure(state="disabled")
         logging.info("--- Starting Export to CSV ---")
 
         def _run_export():
@@ -738,7 +707,6 @@ class SmartInwestorApp(ctk.CTk):
                 logging.info("--- Export Completed Successfully ---")
             else:
                 logging.error("--- Export Failed ---")
-            self.after(0, lambda: self.export_button.configure(state="normal"))
 
         thread = threading.Thread(target=_run_export, daemon=True)
         thread.start()
@@ -994,8 +962,6 @@ class SmartInwestorApp(ctk.CTk):
         """
         Triggers the API update in a background thread.
         """
-        self.api_button.configure(state="disabled")
-        self.vision_button.configure(state="disabled")
         logging.info("--- Starting Market Prices Update ---")
 
         thread = threading.Thread(target=self._run_update_portfolio_api, daemon=True)
@@ -1046,6 +1012,31 @@ class SmartInwestorApp(ctk.CTk):
             if trigger_saldo_after:
                 self.after(0, self.update_saldo)
 
+    def handle_file_drop(self, event):
+        """
+        Handles file drop events on the main window.
+        """
+        file_path = event.data
+        if file_path.startswith('{') and file_path.endswith('}'):
+            file_path = file_path[1:-1]
+
+        # Clean up path issues sometimes present on Windows
+        file_path = file_path.strip()
+
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+            logging.info(f"File dropped: {file_path}")
+            # Ensure file picker is bypassed and start scanning
+            self._run_scan_screenshot_ai_thread(file_path)
+        else:
+            logging.warning(f"Ignored dropped file (unsupported type): {file_path}")
+
+    def _run_scan_screenshot_ai_thread(self, file_path):
+        self.api_button.configure(state="disabled") if hasattr(self, 'api_button') else None
+        self.vision_button.configure(state="disabled") if hasattr(self, 'vision_button') else None
+        logging.info(f"--- Starting AI analysis for dropped file: {os.path.basename(file_path)} ---")
+        thread = threading.Thread(target=self._run_scan_screenshot_ai, args=(file_path,), daemon=True)
+        thread.start()
+
     def scan_screenshot_ai(self):
         """
         Opens a file dialog to select an image, then triggers Vision parsing in a background thread.
@@ -1057,9 +1048,6 @@ class SmartInwestorApp(ctk.CTk):
 
         if not file_path:
             return
-
-        self.api_button.configure(state="disabled")
-        self.vision_button.configure(state="disabled")
         logging.info(f"--- Starting AI analysis for file: {os.path.basename(file_path)} ---")
 
         thread = threading.Thread(target=self._run_scan_screenshot_ai, args=(file_path,), daemon=True)
@@ -1096,10 +1084,9 @@ class SmartInwestorApp(ctk.CTk):
 
     def _restore_buttons(self):
         """
-        Re-enables the buttons on the main thread after background tasks finish.
+        (Deprecated) Used to re-enable buttons on the main thread.
         """
-        self.api_button.configure(state="normal")
-        self.vision_button.configure(state="normal")
+        pass
 
 
 if __name__ == "__main__":
