@@ -14,6 +14,9 @@ from config_manager import config, save_config
 import logger  # Initializes the root logger with File and Stream handlers
 import dotenv
 from nbp_api import fetch_usd_pln_rate
+from plyer import notification
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -137,11 +140,18 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.rate_label.grid(row=0, column=1, padx=(10, 20), sticky="e")
 
+        # Auto-update Checkbox
+        self.auto_update_var = ctk.BooleanVar(value=False)
+        self.auto_update_checkbox = ctk.CTkCheckBox(
+            self.header_frame, text="▶ Auto-update (15 min)", variable=self.auto_update_var, command=self.toggle_auto_update
+        )
+        self.auto_update_checkbox.grid(row=0, column=2, padx=(10, 20), sticky="e")
+
         # Settings Button
         self.settings_button = ctk.CTkButton(
             self.header_frame, text="⚙️ Ustawienia", command=self.open_settings_window, width=120
         )
-        self.settings_button.grid(row=0, column=2, padx=20)
+        self.settings_button.grid(row=0, column=3, padx=20)
 
         # 2. Buttons Frame
         self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -199,7 +209,7 @@ class SmartInwestorApp(ctk.CTk):
         self.tab_view._segmented_button.configure(font=ctk.CTkFont(size=16, weight="bold"))
         self.tab_view.grid(row=0, column=0, sticky="ew")
 
-        self.tab_names = ["Info", "Strategia", "Salda", "Pozycje otwarte", "Trejdy", "Refleksje"]
+        self.tab_names = ["Info", "Strategia", "Salda", "Pozycje otwarte", "Trejdy", "Refleksje", "📈 Wykres"]
         for tab_name in self.tab_names:
             self.tab_view.add(tab_name)
 
@@ -211,6 +221,11 @@ class SmartInwestorApp(ctk.CTk):
         self.refresh_button.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
         self.setup_treeview()
+
+        # Frame for Matplotlib Chart (hidden by default)
+        self.chart_frame = ctk.CTkFrame(self.dashboard_frame, fg_color="transparent")
+        self.chart_frame.grid(row=1, column=0, sticky="nsew")
+        self.chart_frame.grid_remove() # Hide initially
 
         # 4. Console Log (Textbox)
         self.log_textbox = ctk.CTkTextbox(self, state="disabled", height=150, font=ctk.CTkFont(size=13))
@@ -238,6 +253,40 @@ class SmartInwestorApp(ctk.CTk):
             self.after(0, lambda: self.rate_label.configure(text=f"Kurs USD/PLN (NBP): {rate:.2f}"))
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def toggle_auto_update(self):
+        """Toggles the auto-update loop based on the checkbox state."""
+        if self.auto_update_var.get():
+            logging.info("Auto-update activated. Next update in 15 minutes.")
+            self.auto_update_loop()
+        else:
+            logging.info("Auto-update deactivated.")
+            if hasattr(self, '_auto_update_timer') and self._auto_update_timer is not None:
+                self.after_cancel(self._auto_update_timer)
+                self._auto_update_timer = None
+
+    def auto_update_loop(self):
+        """The loop that runs every 15 minutes if auto-update is active."""
+        if self.auto_update_var.get():
+            # Trigger the update process. We want portfolio prices AND saldo update.
+            # We'll call update_portfolio_api and let it cascade to update_saldo if auto-update is active.
+            logging.info("--- Running Auto-Update Cycle ---")
+            self._run_auto_update_sequence()
+            # Schedule next run in 15 minutes (900,000 ms)
+            self._auto_update_timer = self.after(900000, self.auto_update_loop)
+
+    def _run_auto_update_sequence(self):
+        """Runs the portfolio update and then immediately the saldo update."""
+        self.api_button.configure(state="disabled")
+        self.vision_button.configure(state="disabled")
+        self.saldo_button.configure(state="disabled")
+
+        def _sequence():
+            # 1. Update Market Prices
+            self._run_update_portfolio_api(trigger_saldo_after=True)
+
+        thread = threading.Thread(target=_sequence, daemon=True)
+        thread.start()
 
     def setup_treeview(self):
         """
@@ -496,36 +545,113 @@ class SmartInwestorApp(ctk.CTk):
 
     def load_dashboard_data(self):
         """
-        Loads data from the Excel file based on the selected tab and updates the Treeview.
+        Loads data from the Excel file based on the selected tab and updates the Treeview or Chart.
         """
         try:
             selected_tab = self.tab_view.get()
-            df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"], sheet_name=selected_tab)
 
-            # Clear existing data
-            self.tree.delete(*self.tree.get_children())
+            if selected_tab == "📈 Wykres":
+                self.tree.grid_remove()
+                self.tree_scroll_y.grid_remove()
+                self.tree_scroll_x.grid_remove()
+                self.chart_frame.grid()
+                self._render_chart()
+            else:
+                self.chart_frame.grid_remove()
+                self.tree.grid()
+                self.tree_scroll_y.grid()
+                self.tree_scroll_x.grid()
 
-            if df.empty:
-                self.tree["columns"] = []
-                return
+                df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"], sheet_name=selected_tab)
 
-            # Setup columns based on dataframe
-            columns = list(df.columns)
-            self.tree["columns"] = columns
-            self.tree["show"] = "headings"
+                # Clear existing data
+                self.tree.delete(*self.tree.get_children())
 
-            for col in columns:
-                self.tree.heading(col, text=str(col))
-                # Auto-adjust column width based on header length (approx)
-                self.tree.column(col, width=max(100, len(str(col)) * 10), anchor="center")
+                if df.empty:
+                    self.tree["columns"] = []
+                    return
 
-            # Insert data rows
-            for _, row in df.iterrows():
-                values = ["" if pd.isna(v) else str(v) for v in row.tolist()]
-                self.tree.insert("", "end", values=values)
+                # Setup columns based on dataframe
+                columns = list(df.columns)
+                self.tree["columns"] = columns
+                self.tree["show"] = "headings"
+
+                for col in columns:
+                    self.tree.heading(col, text=str(col))
+                    # Auto-adjust column width based on header length (approx)
+                    self.tree.column(col, width=max(100, len(str(col)) * 10), anchor="center")
+
+                # Insert data rows
+                for _, row in df.iterrows():
+                    values = ["" if pd.isna(v) else str(v) for v in row.tolist()]
+                    self.tree.insert("", "end", values=values)
 
         except Exception as e:
             logging.error(f"Failed to load dashboard data: {e}")
+
+    def _render_chart(self):
+        """
+        Renders the Matplotlib chart in the chart frame.
+        """
+        # Clear existing widgets in chart_frame
+        for widget in self.chart_frame.winfo_children():
+            widget.destroy()
+
+        # Prevent memory leaks with pyplot
+        plt.close('all')
+
+        try:
+            df = ExcelHandler.get_dashboard_data(config["EXCEL_FILENAME"], sheet_name="Historia")
+
+            if df.empty or "Date" not in df.columns or "Total_PLN" not in df.columns:
+                label = ctk.CTkLabel(self.chart_frame, text="Brak danych do wyświetlenia wykresu. Zaktualizuj saldo.")
+                label.pack(expand=True)
+                return
+
+            # Convert types for plotting
+            df["Date"] = pd.to_datetime(df["Date"])
+            df["Total_PLN"] = pd.to_numeric(df["Total_PLN"], errors='coerce')
+            df.dropna(subset=["Total_PLN"], inplace=True)
+            df.sort_values(by="Date", inplace=True)
+
+            if df.empty:
+                label = ctk.CTkLabel(self.chart_frame, text="Dane w arkuszu 'Historia' są niepoprawne.")
+                label.pack(expand=True)
+                return
+
+            # Set dark background style
+            plt.style.use('dark_background')
+
+            fig, ax = plt.subplots(figsize=(8, 4), dpi=100)
+            fig.patch.set_facecolor('#2b2b2b')
+            ax.set_facecolor('#2b2b2b')
+
+            ax.plot(df["Date"], df["Total_PLN"], marker='o', linestyle='-', color='#1f538d', linewidth=2)
+
+            ax.set_title("Wartość Portfela w Czasie", fontsize=14, color="#dce4ee")
+            ax.set_xlabel("Data", fontsize=12, color="#dce4ee")
+            ax.set_ylabel("Total PLN", fontsize=12, color="#dce4ee")
+
+            # Formatting axes
+            ax.tick_params(axis='x', colors='#dce4ee', rotation=45)
+            ax.tick_params(axis='y', colors='#dce4ee')
+            ax.grid(True, linestyle='--', alpha=0.3, color='#dce4ee')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_color('#dce4ee')
+            ax.spines['left'].set_color('#dce4ee')
+
+            fig.tight_layout()
+
+            # Embed in Tkinter
+            canvas = FigureCanvasTkAgg(fig, master=self.chart_frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill="both", expand=True)
+
+        except Exception as e:
+            logging.error(f"Failed to render chart: {e}")
+            label = ctk.CTkLabel(self.chart_frame, text="Błąd podczas ładowania wykresu.")
+            label.pack(expand=True)
 
     def export_reports(self):
         """
@@ -803,7 +929,7 @@ class SmartInwestorApp(ctk.CTk):
         thread = threading.Thread(target=self._run_update_portfolio_api, daemon=True)
         thread.start()
 
-    def _run_update_portfolio_api(self):
+    def _run_update_portfolio_api(self, trigger_saldo_after=False):
         """
         Background thread logic for updating portfolio via API.
         """
@@ -829,6 +955,15 @@ class SmartInwestorApp(ctk.CTk):
             # Save workbook
             if excel.save_workbook():
                 logging.info("--- Market Prices Update completed successfully ---")
+                try:
+                    notification.notify(
+                        title="Gra Inwestycyjna",
+                        message="Market Prices Update completed successfully.",
+                        app_name="Gra Inwestycyjna",
+                        timeout=5
+                    )
+                except Exception as notif_e:
+                    logging.warning(f"Could not show desktop notification: {notif_e}")
             else:
                 logging.error("--- Market Prices Update failed during save ---")
         except Exception as e:
@@ -836,6 +971,8 @@ class SmartInwestorApp(ctk.CTk):
         finally:
             self.after(0, self._restore_buttons)
             self.after(0, self.load_dashboard_data)
+            if trigger_saldo_after:
+                self.after(0, self.update_saldo)
 
     def scan_screenshot_ai(self):
         """

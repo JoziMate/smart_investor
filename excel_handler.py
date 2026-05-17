@@ -252,11 +252,47 @@ class ExcelHandler:
             self.sheet.cell(row=empty_row, column=11).value = balances["Interactive Brokers"]
 
             logger_inst.info(f"Appended new saldo update at row {empty_row}.")
+
+            # Update Historia sheet with the new total portfolio value
+            total_pln = sum(balances.values())
+            self.append_to_historia(today_str, total_pln)
+
             return True
 
         except Exception as e:
             logger_inst.error(f"Failed to update saldo: {e}")
             return False
+
+    def append_to_historia(self, date_str: str, total_pln: float):
+        """
+        Appends the date and total PLN value to the 'Historia' sheet.
+        Creates the sheet if it doesn't exist.
+        """
+        if self.workbook is None:
+            logger_inst.error("Cannot append to Historia: Workbook is not loaded.")
+            return
+
+        try:
+            if "Historia" not in self.workbook.sheetnames:
+                historia_sheet = self.workbook.create_sheet("Historia")
+                historia_sheet.cell(row=1, column=1).value = "Date"
+                historia_sheet.cell(row=1, column=2).value = "Total_PLN"
+                logger_inst.info("Created 'Historia' sheet.")
+            else:
+                historia_sheet = self.workbook["Historia"]
+
+            # Find the first empty row
+            empty_row = 1
+            while historia_sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            historia_sheet.cell(row=empty_row, column=1).value = date_str
+            historia_sheet.cell(row=empty_row, column=2).value = total_pln
+
+            logger_inst.info(f"Appended to Historia at row {empty_row}: Date={date_str}, Total_PLN={total_pln:.2f}")
+
+        except Exception as e:
+            logger_inst.error(f"Failed to append to Historia: {e}")
 
     def append_strategy(self, strategy_data: dict) -> bool:
         """
@@ -451,6 +487,9 @@ class ExcelHandler:
                 skiprows = 6
             elif sheet_name == "Info":
                 header = None
+            elif sheet_name == "Historia":
+                header = 0
+                skiprows = None
 
             df = pd.read_excel(filename, sheet_name=sheet_name, skiprows=skiprows, header=header, dtype=str)
 

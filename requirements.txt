@@ -9,3 +9,5 @@ pytest
 pytest-mock
 pandas
 requests
+plyer
+matplotlib
