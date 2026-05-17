@@ -13,6 +13,7 @@ from ai_analyzer import generate_market_reflections
 from config_manager import config, save_config
 import logger  # Initializes the root logger with File and Stream handlers
 import dotenv
+from nbp_api import fetch_usd_pln_rate
 
 # Set customtkinter appearance and theme
 ctk.set_appearance_mode("dark")
@@ -130,6 +131,60 @@ class SmartInwestorApp(ctk.CTk):
         )
         self.header_label.grid(row=0, column=0)
 
+        # Rate Label
+        self.rate_label = ctk.CTkLabel(
+            self.header_frame, text="Kurs USD/PLN (NBP): Trwa pobieranie...", font=ctk.CTkFont(size=14)
+        )
+        self.rate_label.grid(row=0, column=1, padx=(10, 20), sticky="e")
+
+        # Settings Button
+        self.settings_button = ctk.CTkButton(
+            self.header_frame, text="⚙️ Ustawienia", command=self.open_settings_window, width=120
+        )
+        self.settings_button.grid(row=0, column=2, padx=20)
+
+        # 2. Buttons Frame
+        self.buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.buttons_frame.grid(row=1, column=0, pady=(10, 10))
+
+        self.api_button = ctk.CTkButton(
+            self.buttons_frame, text="Update Market Prices", command=self.update_portfolio_api
+        )
+        self.api_button.grid(row=0, column=0, padx=10)
+
+        self.vision_button = ctk.CTkButton(
+            self.buttons_frame, text="Upload Trade Screenshot", command=self.scan_screenshot_ai
+        )
+        self.vision_button.grid(row=0, column=1, padx=10)
+
+        self.export_button = ctk.CTkButton(
+            self.buttons_frame, text="Eksportuj Raport", command=self.export_reports
+        )
+        self.export_button.grid(row=0, column=2, padx=10)
+
+        self.secondary_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.secondary_buttons_frame.grid(row=2, column=0, pady=(0, 10))
+
+        self.saldo_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Aktualizuj Saldo", command=self.update_saldo
+        )
+        self.saldo_button.grid(row=0, column=0, padx=10)
+
+        self.strategy_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Dodaj Strategię", command=self.open_strategy_modal
+        )
+        self.strategy_button.grid(row=0, column=1, padx=10)
+
+        self.reflection_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="Generuj Refleksje (AI)", command=self.generate_reflections
+        )
+        self.reflection_button.grid(row=0, column=2, padx=10)
+
+        self.risk_calc_button = ctk.CTkButton(
+            self.secondary_buttons_frame, text="🧮 Kalkulator Ryzyka", command=self.open_risk_calculator
+        )
+        self.risk_calc_button.grid(row=0, column=3, padx=10)
+
         # 3. Dashboard Frame (Treeview)
         self.dashboard_frame = ctk.CTkFrame(self)
         self.dashboard_frame.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="nsew")
@@ -171,77 +226,18 @@ class SmartInwestorApp(ctk.CTk):
         # Start polling the queue for log messages
         self.after(100, self.poll_log_queue)
 
-    def handle_plik_menu(self, choice):
-        # Reset the menu text to "Plik"
-        self.plik_menu.set("Plik")
+        # Fetch NBP Rate
+        self.usd_pln_rate = 4.00 # Default
+        self.fetch_rate_bg()
 
-        if choice == "Zapisz edycję arkusza":
-            self.save_sheet_edits()
-        elif choice == "Eksportuj Raport":
-            self.export_reports()
-        elif choice == "Ustawienia":
-            self.open_settings_window()
-        elif choice == "Zakończ":
-            self.destroy()
+    def fetch_rate_bg(self):
+        """Fetches the NBP rate in the background to avoid freezing the GUI."""
+        def _fetch():
+            rate = fetch_usd_pln_rate()
+            self.usd_pln_rate = rate
+            self.after(0, lambda: self.rate_label.configure(text=f"Kurs USD/PLN (NBP): {rate:.2f}"))
 
-    def handle_akcje_menu(self, choice):
-        # Reset the menu text to "Akcje"
-        self.akcje_menu.set("Akcje")
-
-        if choice == "Update Market Prices":
-            self.update_portfolio_api()
-        elif choice == "Upload Trade Screenshot":
-            self.scan_screenshot_ai()
-
-    def handle_narzedzia_menu(self, choice):
-        # Reset the menu text to "Narzędzia"
-        self.narzedzia_menu.set("Narzędzia")
-
-        if choice == "Aktualizuj Saldo":
-            self.update_saldo()
-        elif choice == "Dodaj Strategię":
-            self.open_strategy_modal()
-        elif choice == "Generuj Refleksje (AI)":
-            self.generate_reflections()
-        elif choice == "Kalkulator Ryzyka":
-            self.open_risk_calculator()
-
-    def save_sheet_edits(self):
-        self.plik_menu.configure(state="disabled")
-        logging.info("--- Starting Save of Sheet Edits ---")
-
-        # Capture current state of the datagrid
-        current_tab = self.tab_view.get()
-        data_to_save = []
-        for item in self.tree.get_children():
-            # tree.item(item)['values'] returns a list of values
-            # Sometimes values might be read as integers by tkinter if they look like it,
-            # so we ensure they are casted to strings representing empty or filled cells.
-            row_data = ["" if v == "None" or v is None else str(v) for v in self.tree.item(item)['values']]
-            data_to_save.append(row_data)
-
-        def _run_save_edits():
-            try:
-                excel = ExcelHandler(config["EXCEL_FILENAME"], current_tab)
-                if not excel.load_workbook():
-                    logging.error("Could not load the Excel workbook to save edits.")
-                    return
-
-                if excel.save_sheet_edits(data_to_save):
-                    if excel.save_workbook():
-                        logging.info("--- Sheet Edits saved successfully ---")
-                    else:
-                        logging.error("--- Failed to save workbook after edits ---")
-                else:
-                    logging.error("--- Failed to apply edits to sheet ---")
-            except Exception as e:
-                logging.error(f"Unexpected error saving edits: {e}")
-            finally:
-                self.after(0, lambda: self.plik_menu.configure(state="normal"))
-                self.after(0, self.load_dashboard_data)
-
-        thread = threading.Thread(target=_run_save_edits, daemon=True)
-        thread.start()
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def setup_treeview(self):
         """
@@ -357,7 +353,7 @@ class SmartInwestorApp(ctk.CTk):
                     logging.error("Could not load the Excel workbook to update Salda.")
                     return
 
-                if excel.update_saldo(df_open_pos):
+                if excel.update_saldo(df_open_pos, getattr(self, 'usd_pln_rate', 1.0)):
                     if excel.save_workbook():
                         logging.info("--- Saldo Update completed successfully ---")
                     else:

@@ -132,14 +132,26 @@ class ExcelHandler:
             return False
 
         try:
-            # Find the first row where Column A is empty
-            # Start from row 5 as per "Trejdy" sheet requirements.
-            empty_row = 5
-            while self.sheet.cell(row=empty_row, column=1).value is not None:
-                empty_row += 1
-
             # Date format
             today_str = datetime.now().strftime('%Y-%m-%d')
+            ticker_to_add = trade_data.get('Ticker', '')
+
+            # Check for duplicates and find the first empty row
+            # Start from row 5 as per "Trejdy" sheet requirements.
+            current_row = 5
+            while self.sheet.cell(row=current_row, column=1).value is not None:
+                existing_date = str(self.sheet.cell(row=current_row, column=1).value).strip()
+                existing_ticker = str(self.sheet.cell(row=current_row, column=3).value).strip()
+
+                # Check for duplicate Ticker and Date
+                # Existing date might be formatted differently or contain time, so we check if today_str is in existing_date
+                if existing_ticker == ticker_to_add and today_str in existing_date:
+                    logger_inst.warning(f"Duplicate trade detected for Ticker '{ticker_to_add}' on Date '{today_str}'. Aborting append.")
+                    return False
+
+                current_row += 1
+
+            empty_row = current_row
 
             # Map columns according to requirements:
             # Column A = Date
@@ -168,12 +180,14 @@ class ExcelHandler:
             logger_inst.error(f"Failed to append new position: {e}")
             return False
 
-    def update_saldo(self, df_open_pos: pd.DataFrame) -> bool:
+    def update_saldo(self, df_open_pos: pd.DataFrame, usd_pln_rate: float = 1.0) -> bool:
         """
         Calculates balances from 'Pozycje otwarte' and appends them to 'Salda'.
+        Multiplies USD-based platforms by usd_pln_rate to convert to PLN.
 
         Args:
             df_open_pos (pd.DataFrame): DataFrame of the 'Pozycje otwarte' sheet.
+            usd_pln_rate (float): The current USD/PLN exchange rate.
 
         Returns:
             bool: True if successful, False otherwise.
@@ -213,6 +227,14 @@ class ExcelHandler:
                 except ValueError:
                     # Skip rows where volume or price cannot be parsed as floats
                     continue
+
+            # Apply USD/PLN conversion for USD platforms
+            if "Interactive Brokers" in balances:
+                balances["Interactive Brokers"] *= usd_pln_rate
+            if "Saxo" in balances:
+                balances["Saxo"] *= usd_pln_rate
+            if "Binance Futures" in balances:
+                balances["Binance Futures"] *= usd_pln_rate
 
             # Find the first empty row in 'Salda' (starting from row 8 based on skipping 6 headers, 1st data row is 8)
             empty_row = 8
