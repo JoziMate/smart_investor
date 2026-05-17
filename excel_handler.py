@@ -132,14 +132,26 @@ class ExcelHandler:
             return False
 
         try:
-            # Find the first row where Column A is empty
-            # Start from row 5 as per "Trejdy" sheet requirements.
-            empty_row = 5
-            while self.sheet.cell(row=empty_row, column=1).value is not None:
-                empty_row += 1
-
             # Date format
             today_str = datetime.now().strftime('%Y-%m-%d')
+            ticker_to_add = trade_data.get('Ticker', '')
+
+            # Check for duplicates and find the first empty row
+            # Start from row 5 as per "Trejdy" sheet requirements.
+            current_row = 5
+            while self.sheet.cell(row=current_row, column=1).value is not None:
+                existing_date = str(self.sheet.cell(row=current_row, column=1).value).strip()
+                existing_ticker = str(self.sheet.cell(row=current_row, column=3).value).strip()
+
+                # Check for duplicate Ticker and Date
+                # Existing date might be formatted differently or contain time, so we check if today_str is in existing_date
+                if existing_ticker == ticker_to_add and today_str in existing_date:
+                    logger_inst.warning(f"Duplicate trade detected for Ticker '{ticker_to_add}' on Date '{today_str}'. Aborting append.")
+                    return False
+
+                current_row += 1
+
+            empty_row = current_row
 
             # Map columns according to requirements:
             # Column A = Date
@@ -168,12 +180,14 @@ class ExcelHandler:
             logger_inst.error(f"Failed to append new position: {e}")
             return False
 
-    def update_saldo(self, df_open_pos: pd.DataFrame) -> bool:
+    def update_saldo(self, df_open_pos: pd.DataFrame, usd_pln_rate: float = 1.0) -> bool:
         """
         Calculates balances from 'Pozycje otwarte' and appends them to 'Salda'.
+        Multiplies USD-based platforms by usd_pln_rate to convert to PLN.
 
         Args:
             df_open_pos (pd.DataFrame): DataFrame of the 'Pozycje otwarte' sheet.
+            usd_pln_rate (float): The current USD/PLN exchange rate.
 
         Returns:
             bool: True if successful, False otherwise.
@@ -214,6 +228,14 @@ class ExcelHandler:
                     # Skip rows where volume or price cannot be parsed as floats
                     continue
 
+            # Apply USD/PLN conversion for USD platforms
+            if "Interactive Brokers" in balances:
+                balances["Interactive Brokers"] *= usd_pln_rate
+            if "Saxo" in balances:
+                balances["Saxo"] *= usd_pln_rate
+            if "Binance Futures" in balances:
+                balances["Binance Futures"] *= usd_pln_rate
+
             # Find the first empty row in 'Salda' (starting from row 8 based on skipping 6 headers, 1st data row is 8)
             empty_row = 8
             while self.sheet.cell(row=empty_row, column=1).value is not None:
@@ -230,11 +252,47 @@ class ExcelHandler:
             self.sheet.cell(row=empty_row, column=11).value = balances["Interactive Brokers"]
 
             logger_inst.info(f"Appended new saldo update at row {empty_row}.")
+
+            # Update Historia sheet with the new total portfolio value
+            total_pln = sum(balances.values())
+            self.append_to_historia(today_str, total_pln)
+
             return True
 
         except Exception as e:
             logger_inst.error(f"Failed to update saldo: {e}")
             return False
+
+    def append_to_historia(self, date_str: str, total_pln: float):
+        """
+        Appends the date and total PLN value to the 'Historia' sheet.
+        Creates the sheet if it doesn't exist.
+        """
+        if self.workbook is None:
+            logger_inst.error("Cannot append to Historia: Workbook is not loaded.")
+            return
+
+        try:
+            if "Historia" not in self.workbook.sheetnames:
+                historia_sheet = self.workbook.create_sheet("Historia")
+                historia_sheet.cell(row=1, column=1).value = "Date"
+                historia_sheet.cell(row=1, column=2).value = "Total_PLN"
+                logger_inst.info("Created 'Historia' sheet.")
+            else:
+                historia_sheet = self.workbook["Historia"]
+
+            # Find the first empty row
+            empty_row = 1
+            while historia_sheet.cell(row=empty_row, column=1).value is not None:
+                empty_row += 1
+
+            historia_sheet.cell(row=empty_row, column=1).value = date_str
+            historia_sheet.cell(row=empty_row, column=2).value = total_pln
+
+            logger_inst.info(f"Appended to Historia at row {empty_row}: Date={date_str}, Total_PLN={total_pln:.2f}")
+
+        except Exception as e:
+            logger_inst.error(f"Failed to append to Historia: {e}")
 
     def append_strategy(self, strategy_data: dict) -> bool:
         """
@@ -429,6 +487,9 @@ class ExcelHandler:
                 skiprows = 6
             elif sheet_name == "Info":
                 header = None
+            elif sheet_name == "Historia":
+                header = 0
+                skiprows = None
 
             df = pd.read_excel(filename, sheet_name=sheet_name, skiprows=skiprows, header=header, dtype=str)
 
