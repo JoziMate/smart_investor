@@ -1,6 +1,17 @@
 import argparse
 import logging
 import sys
+import os
+import ctypes
+
+if os.name == 'nt':
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2) # Per-monitor DPI aware
+    except:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except:
+            pass
 
 from app_gui import SmartInwestorApp
 from config_manager import config

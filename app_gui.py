@@ -344,7 +344,7 @@ class SmartInwestorApp(TkinterDnDCTk):
                         foreground=fg_color,
                         fieldbackground=bg_color,
                         font=('Arial', 14),
-                        rowheight=32,
+                        rowheight=35,
                         borderwidth=0)
 
         style.map("Treeview",
@@ -409,9 +409,10 @@ class SmartInwestorApp(TkinterDnDCTk):
             corner_radius=0
         )
         entry.place(x=x, y=y, width=width, height=height)
+        entry.lift()
         entry.insert(0, current_value)
+        entry.focus_set()
         entry.select_range(0, 'end')
-        entry.focus()
 
         def save_edit(event=None):
             if entry.winfo_exists():
