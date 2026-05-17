@@ -245,6 +245,78 @@ class SmartInwestorApp(ctk.CTk):
         self.usd_pln_rate = 4.00 # Default
         self.fetch_rate_bg()
 
+    def save_sheet_edits(self):
+        """
+        Extracts all data from the active Treeview and saves it to the currently selected Excel sheet.
+        """
+        selected_tab = self.tab_view.get()
+        if selected_tab == "📈 Wykres":
+            logging.warning("Cannot save edits while on the Chart tab.")
+            return
+
+        data = []
+        for item in self.tree.get_children():
+            data.append(self.tree.item(item)['values'])
+
+        if not data:
+            logging.warning("No data found in grid to save.")
+            return
+
+        try:
+            excel = ExcelHandler(config["EXCEL_FILENAME"], selected_tab)
+            if not excel.load_workbook():
+                logging.error("Failed to load workbook for saving edits.")
+                return
+
+            if excel.save_sheet_edits(data):
+                if excel.save_workbook():
+                    logging.info(f"Edits saved successfully to sheet '{selected_tab}'.")
+                    try:
+                        notification.notify(
+                            title="Gra Inwestycyjna",
+                            message=f"Edits saved to '{selected_tab}' successfully.",
+                            app_name="Gra Inwestycyjna",
+                            timeout=5
+                        )
+                    except Exception as notif_e:
+                        logging.warning(f"Notification error: {notif_e}")
+                else:
+                    logging.error("Failed to save workbook after writing edits.")
+            else:
+                logging.error(f"Failed to write edits to sheet '{selected_tab}'.")
+
+        except Exception as e:
+            logging.error(f"An unexpected error occurred while saving edits: {e}")
+
+    def handle_plik_menu(self, choice):
+        self.plik_menu.set("Plik")
+        if choice == "Zapisz edycję arkusza":
+            self.save_sheet_edits()
+        elif choice == "Eksportuj Raport":
+            self.export_reports()
+        elif choice == "Ustawienia":
+            self.open_settings_window()
+        elif choice == "Zakończ":
+            self.destroy()
+
+    def handle_akcje_menu(self, choice):
+        self.akcje_menu.set("Akcje")
+        if choice == "Update Market Prices":
+            self.update_portfolio_api()
+        elif choice == "Upload Trade Screenshot":
+            self.scan_screenshot_ai()
+
+    def handle_narzedzia_menu(self, choice):
+        self.narzedzia_menu.set("Narzędzia")
+        if choice == "Aktualizuj Saldo":
+            self.update_saldo()
+        elif choice == "Dodaj Strategię":
+            self.open_strategy_modal()
+        elif choice == "Generuj Refleksje (AI)":
+            self.generate_reflections()
+        elif choice == "Kalkulator Ryzyka":
+            self.open_risk_calculator()
+
     def fetch_rate_bg(self):
         """Fetches the NBP rate in the background to avoid freezing the GUI."""
         def _fetch():
