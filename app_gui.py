@@ -63,9 +63,67 @@ class SmartInwestorApp(ctk.CTk):
         self.grid_rowconfigure(4, weight=1) # The dashboard area
         self.grid_rowconfigure(5, weight=1) # The log area
 
-        # 1. Header Frame (for title and settings button)
+        # 1. Top Menu Bar
+        self.menu_frame = ctk.CTkFrame(self, height=40, corner_radius=0)
+        self.menu_frame.grid(row=0, column=0, sticky="ew")
+        self.menu_frame.grid_columnconfigure(3, weight=1)
+
+        menu_font = ctk.CTkFont(size=14, weight="bold")
+
+        # Plik Menu
+        self.plik_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Zapisz edycję arkusza", "Eksportuj Raport", "Ustawienia", "Zakończ"],
+            command=self.handle_plik_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.plik_menu.set("Plik")
+        self.plik_menu.grid(row=0, column=0, padx=5, pady=5)
+
+        # Akcje Menu
+        self.akcje_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Update Market Prices", "Upload Trade Screenshot"],
+            command=self.handle_akcje_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.akcje_menu.set("Akcje")
+        self.akcje_menu.grid(row=0, column=1, padx=5, pady=5)
+
+        # Narzędzia Menu
+        self.narzedzia_menu = ctk.CTkOptionMenu(
+            self.menu_frame,
+            values=["Aktualizuj Saldo", "Dodaj Strategię", "Generuj Refleksje (AI)", "Kalkulator Ryzyka"],
+            command=self.handle_narzedzia_menu,
+            font=menu_font,
+            dropdown_font=menu_font,
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            button_color="transparent",
+            button_hover_color=("gray75", "gray25"),
+            anchor="w",
+            width=100
+        )
+        self.narzedzia_menu.set("Narzędzia")
+        self.narzedzia_menu.grid(row=0, column=2, padx=5, pady=5)
+
+        # 2. Header Frame (for title)
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, pady=(20, 10), sticky="ew")
+        self.header_frame.grid(row=1, column=0, pady=(20, 10), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         self.header_label = ctk.CTkLabel(
@@ -197,7 +255,7 @@ class SmartInwestorApp(ctk.CTk):
                         background=bg_color,
                         foreground=fg_color,
                         fieldbackground=bg_color,
-                        font=('Arial', 13),
+                        font=('Arial', 14),
                         rowheight=30,
                         borderwidth=0)
 
@@ -207,7 +265,7 @@ class SmartInwestorApp(ctk.CTk):
         style.configure("Treeview.Heading",
                         background="#3b3b3b",
                         foreground=fg_color,
-                        font=('Arial', 14, 'bold'),
+                        font=('Arial', 15, 'bold'),
                         borderwidth=1)
 
         style.map("Treeview.Heading",
@@ -230,6 +288,50 @@ class SmartInwestorApp(ctk.CTk):
 
         self.tree_scroll_y.config(command=self.tree.yview)
         self.tree_scroll_x.config(command=self.tree.xview)
+
+        # Bind double-click for in-place editing
+        self.tree.bind("<Double-1>", self.on_double_click)
+
+    def on_double_click(self, event):
+        """
+        Handles double-click events to spawn an entry widget over the cell.
+        """
+        region = self.tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+
+        column = self.tree.identify_column(event.x)
+        item = self.tree.identify_row(event.y)
+        if not column or not item:
+            return
+
+        col_index = int(column[1:]) - 1
+        x, y, width, height = self.tree.bbox(item, column)
+
+        # Get current value
+        current_value = self.tree.set(item, column)
+
+        # Create entry widget
+        entry = ctk.CTkEntry(self.tree, font=ctk.CTkFont(size=14))
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, current_value)
+        entry.select_range(0, 'end')
+        entry.focus()
+
+        def save_edit(event=None):
+            if entry.winfo_exists():
+                new_value = entry.get()
+                self.tree.set(item, column, new_value)
+                entry.destroy()
+                logging.info(f"Cell edited at row {item}, col {column}: '{current_value}' -> '{new_value}'")
+
+        def cancel_edit(event=None):
+            if entry.winfo_exists():
+                entry.destroy()
+
+        entry.bind("<Return>", save_edit)
+        entry.bind("<FocusOut>", save_edit)
+        entry.bind("<Escape>", cancel_edit)
 
     def update_saldo(self):
         """
