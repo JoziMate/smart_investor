@@ -447,22 +447,8 @@ class ExcelHandler:
                 # Excel rows are 1-indexed, starting from start_row
                 current_row = start_row + r_idx
                 for c_idx, val in enumerate(row_data):
-                    # Attempt to parse back to numbers if appropriate to avoid converting entire sheet to strings,
-                    # but since the UI edits might be strings, we insert as strings or floats if possible.
-                    # As a safe default, write what's given. Let's try converting to float where possible for numerical data consistency.
-                    value_to_write = val
-                    if value_to_write == "":
-                        value_to_write = None
-                    else:
-                        try:
-                            # If it looks like a clean float/int, parse it, except for 'Info' maybe.
-                            if '.' in str(value_to_write):
-                                value_to_write = float(value_to_write)
-                            elif str(value_to_write).lstrip('-').isdigit():
-                                value_to_write = int(value_to_write)
-                        except ValueError:
-                            pass
-
+                    # Write strings raw/object as per instruction "Treat all incoming edits as raw strings/objects (consistent with our `dtype=object` read strategy)."
+                    value_to_write = str(val) if val is not None and val != "" else None
                     self.sheet.cell(row=current_row, column=c_idx + 1).value = value_to_write
 
             return True
