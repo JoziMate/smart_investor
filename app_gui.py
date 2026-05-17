@@ -406,9 +406,11 @@ class SmartInwestorApp(TkinterDnDCTk):
             self.tree,
             font=ctk.CTkFont(family="Arial", size=14),
             border_width=1,
-            corner_radius=0
+            corner_radius=0,
+            width=width,
+            height=height
         )
-        entry.place(x=x, y=y, width=width, height=height)
+        entry.place(x=x, y=y)
         entry.lift()
         entry.insert(0, current_value)
         entry.focus_set()
